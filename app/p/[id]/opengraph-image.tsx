@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { getLoss } from "@/lib/store";
 import { money, multiple, painUsd } from "@/lib/format";
+import { OgLogo } from "@/lib/og-logo";
 
 export const alt = "Wallet scan on LossPornHub";
 export const size = { width: 1200, height: 630 };
@@ -39,14 +40,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 14,
-              background: "linear-gradient(135deg, #b9a7ff, #ff94b8)",
-            }}
-          />
+          <OgLogo size={44} radius={14} />
           <div style={{ display: "flex", fontSize: 30, fontWeight: 700 }}>
             LossPorn<span style={{ color: "#d9b3e0" }}>Hub</span>
           </div>

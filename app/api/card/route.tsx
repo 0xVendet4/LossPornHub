@@ -10,6 +10,7 @@ import { draftFromReport } from "@/lib/scan/draft";
 import { fuzz, toPublic } from "@/lib/privacy";
 import { getLoss } from "@/lib/store";
 import { tierOf } from "@/lib/tier";
+import { OgLogo } from "@/lib/og-logo";
 import type { PublicLoss } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -157,7 +158,7 @@ export async function GET(req: NextRequest) {
   const header = (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{ width: 40, height: 40, borderRadius: 12, background: "linear-gradient(135deg, #b9a7ff, #ff94b8)" }} />
+        <OgLogo size={40} radius={12} />
         <div style={{ display: "flex", fontSize: 28, fontWeight: 700 }}>
           LossPorn<span style={{ color: "#d9b3e0" }}>Hub</span>
         </div>

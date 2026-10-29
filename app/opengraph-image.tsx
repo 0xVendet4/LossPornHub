@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { demoReport } from "@/lib/scan/demo";
 import { money } from "@/lib/format";
+import { OgLogo } from "@/lib/og-logo";
 
 export const alt = "LossPornHub: how much would you have if you hadn't sold?";
 export const size = { width: 1200, height: 630 };
@@ -24,7 +25,7 @@ export default function Image() {
       >
         <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 14, background: "linear-gradient(135deg, #b9a7ff, #ff94b8)" }} />
+            <OgLogo size={44} radius={14} />
             <div style={{ display: "flex", fontSize: 30, fontWeight: 700 }}>
               LossPorn<span style={{ color: "#d9b3e0" }}>Hub</span>
             </div>
