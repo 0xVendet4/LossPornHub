@@ -2,9 +2,11 @@ import Link from "next/link";
 import LossCard from "@/components/LossCard";
 import HeroPreview from "@/components/HeroPreview";
 import CountUp from "@/components/CountUp";
-import { IconArrow, IconCheck, IconLayers, IconSearch, IconTrendUp } from "@/components/Icons";
-import { listLosses, stats, type Sort } from "@/lib/store";
+import { IconArrow, IconCheck, IconFlame, IconLayers, IconSearch, IconTrendUp } from "@/components/Icons";
+import { fumbleOfWeek, listLosses, stats, type Sort } from "@/lib/store";
 import { painUsd } from "@/lib/format";
+import { headline } from "@/lib/headline";
+import { authorName } from "@/lib/privacy";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +39,7 @@ const PROMISES = ["Read-only, nothing to connect", "EVM and Solana", "Numbers st
 export default async function Home({ searchParams }: { searchParams: Promise<{ sort?: string }> }) {
   const { sort: s } = await searchParams;
   const sort: Sort = s === "top" || s === "respects" ? s : "new";
-  const [losses, st] = await Promise.all([listLosses(sort), stats()]);
+  const [losses, st, week] = await Promise.all([listLosses(sort), stats(), fumbleOfWeek()]);
   const solShare = st.total > 0 ? Math.round((st.sol / st.total) * 100) : 0;
 
   return (
@@ -139,6 +141,31 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
           </div>
         ))}
       </section>
+
+      {week && (
+        <section className="surface-glow grid items-center gap-8 p-6 sm:p-8 md:grid-cols-[minmax(0,1fr)_380px]" aria-label="Fumble of the week">
+          <div className="flex flex-col items-start gap-4">
+            <span className="pill text-loss">
+              <IconFlame className="size-3.5" />
+              Fumble of the week
+            </span>
+            <h2 className="font-display text-[clamp(1.75rem,3.5vw,2.6rem)] font-semibold leading-tight">{headline(week)}</h2>
+            <p className="max-w-[44ch] text-dim">
+              The biggest post of the last 7 days, by {authorName(week.author)}.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Link href={`/p/${week.id}`} className="btn btn-primary h-11 px-5 text-sm">
+                See the post
+                <IconArrow />
+              </Link>
+              <Link href="/leaderboard?period=7d" className="btn btn-ghost h-11 px-5 text-sm">
+                This week's ranking
+              </Link>
+            </div>
+          </div>
+          <LossCard loss={week} />
+        </section>
+      )}
 
       <section className="flex flex-col gap-8">
         <div className="flex flex-wrap items-end justify-between gap-4">

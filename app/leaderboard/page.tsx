@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { leaderboard, type LeaderRow } from "@/lib/store";
-import { CHAINS, isChainKey } from "@/lib/chains";
+import { CHAINS, EVM_CHAINS, isChainKey, type ChainKey } from "@/lib/chains";
 import { painUsd } from "@/lib/format";
 import { authorName } from "@/lib/privacy";
 import { tierOf } from "@/lib/tier";
@@ -40,8 +40,32 @@ function NetPill({ row }: { row: LeaderRow }) {
   );
 }
 
-export default async function Leaderboard() {
-  const rows = await leaderboard();
+const PERIODS = [
+  { key: "24h", label: "24h", ms: 86_400_000 },
+  { key: "7d", label: "7 days", ms: 7 * 86_400_000 },
+  { key: "all", label: "All time", ms: 0 },
+] as const;
+type Period = (typeof PERIODS)[number]["key"];
+// As redes que o raio-x lê, na ordem do menu
+const NETWORKS: ChainKey[] = [...EVM_CHAINS, "solana"];
+
+type Props = { searchParams: Promise<{ period?: string; chain?: string }> };
+
+function href(period: Period, chain: ChainKey | null) {
+  const q = new URLSearchParams();
+  if (period !== "all") q.set("period", period);
+  if (chain) q.set("chain", chain);
+  const s = q.toString();
+  return s ? `/leaderboard?${s}` : "/leaderboard";
+}
+
+export default async function Leaderboard({ searchParams }: Props) {
+  const sp = await searchParams;
+  const period: Period = PERIODS.some((p) => p.key === sp.period) ? (sp.period as Period) : "all";
+  const chain = sp.chain && isChainKey(sp.chain) && NETWORKS.includes(sp.chain) ? sp.chain : null;
+  const ms = PERIODS.find((p) => p.key === period)!.ms;
+  const rows = await leaderboard(50, { since: ms ? Date.now() - ms : undefined, chain: chain ?? undefined });
+  const filtered = period !== "all" || !!chain;
   const max = rows[0]?.biggest ?? 1;
   const podium = rows.length >= 3;
   const rest = podium ? rows.slice(3) : rows;
@@ -59,13 +83,43 @@ export default async function Leaderboard() {
         </p>
       </div>
 
+      <div className="-mt-6 flex flex-col gap-3">
+        <nav className="seg self-start" aria-label="Period">
+          {PERIODS.map((p) => (
+            <Link key={p.key} href={href(p.key, chain)} aria-current={period === p.key ? "page" : undefined} scroll={false}>
+              {p.label}
+            </Link>
+          ))}
+        </nav>
+        <nav className="seg max-w-full self-start overflow-x-auto" aria-label="Network">
+          <Link href={href(period, null)} aria-current={!chain ? "page" : undefined} scroll={false}>
+            All networks
+          </Link>
+          {NETWORKS.map((c) => (
+            <Link key={c} href={href(period, c)} aria-current={chain === c ? "page" : undefined} scroll={false} className="inline-flex items-center gap-1.5">
+              <span className="size-1.5 rounded-full" style={{ background: CHAINS[c].color }} />
+              {CHAINS[c].name}
+            </Link>
+          ))}
+        </nav>
+      </div>
+
       {rows.length === 0 ? (
         <div className="surface flex flex-col items-start gap-4 p-8">
-          <p className="font-display text-2xl font-semibold">Nobody on the podium yet.</p>
-          <Link href="/scan" className="btn btn-primary h-11 px-5 text-sm">
-            Take first place
-            <IconArrow />
-          </Link>
+          <p className="font-display text-2xl font-semibold">
+            {filtered ? `No fumbles ${period === "24h" ? "in the last 24 hours" : period === "7d" ? "in the last 7 days" : "yet"}${chain ? ` on ${CHAINS[chain].name}` : ""}.` : "Nobody on the podium yet."}
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/scan" className="btn btn-primary h-11 px-5 text-sm">
+              Take first place
+              <IconArrow />
+            </Link>
+            {filtered && (
+              <Link href="/leaderboard" className="btn btn-ghost h-11 px-5 text-sm">
+                See all time
+              </Link>
+            )}
+          </div>
         </div>
       ) : (
         <>

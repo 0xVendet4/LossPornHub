@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { walletKey } from "./chains";
+import { walletKey, type ChainKey } from "./chains";
 import { authorOf } from "./author";
 import { fuzz, toPublic as publicView } from "./privacy";
 import type { Loss, LossKind, PublicLoss } from "./types";
@@ -75,10 +75,14 @@ export function createStore(backend: Backend) {
     return backend.respect(id, key);
   }
 
-  /** Ranking pelo maior vacilo de cada carteira. O total soma só posts por token (os resumos repetiriam valores). */
-  async function leaderboard(limit = 50): Promise<LeaderRow[]> {
+  /**
+   * Ranking pelo maior vacilo de cada carteira. O total soma só posts por token (os resumos repetiriam valores).
+   * `since` deixa só os posts a partir dessa hora; `chain`, só os dessa rede (num resumo, a do pior token).
+   */
+  async function leaderboard(limit = 50, filter: { since?: number; chain?: ChainKey } = {}): Promise<LeaderRow[]> {
     const rows = new Map<string, LeaderRow>();
     for (const l of await backend.all()) {
+      if ((filter.since && l.createdAt < filter.since) || (filter.chain && l.chain !== filter.chain)) continue;
       const k = walletKey(l.wallet);
       const r = rows.get(k) ?? { author: l.example ? "example" : authorOf(l.wallet), chain: l.chain, family: l.family, total: 0, count: 0, biggest: 0, biggestKind: "missed", biggestToken: "", biggestSymbol: "" };
       if (!SUMMARY.has(l.kind)) r.total += l.amountUsd;
@@ -99,6 +103,15 @@ export function createStore(backend: Backend) {
       .map((r) => ({ ...r, total: fuzz(r.total)!, biggest: fuzz(r.biggest)! }));
   }
 
+  /** O maior post dos últimos 7 dias, sem contar os exemplos. */
+  async function fumbleOfWeek(): Promise<PublicLoss | null> {
+    const since = Date.now() - 7 * 86_400_000;
+    const best = (await backend.all())
+      .filter((l) => !l.example && l.createdAt >= since)
+      .reduce<Loss | null>((m, l) => (!m || l.amountUsd > m.amountUsd ? l : m), null);
+    return best ? toPublic(best) : null;
+  }
+
   async function stats() {
     const all = await backend.all();
     let total = 0, evm = 0, sol = 0, respects = 0;
@@ -117,7 +130,7 @@ export function createStore(backend: Backend) {
     return { total, count: all.length, wallets: wallets.size, respects, evm, sol, biggest: biggest ? toPublic(biggest) : null };
   }
 
-  return { listLosses, authorLosses, getLoss, addLoss, deleteLoss, payRespects, leaderboard, stats };
+  return { listLosses, authorLosses, getLoss, addLoss, deleteLoss, payRespects, leaderboard, fumbleOfWeek, stats };
 }
 
 export type Sort = "new" | "top" | "respects";
@@ -125,4 +138,4 @@ export type NewLoss = Omit<Loss, "id" | "respects" | "respectedBy" | "createdAt"
 export type LeaderRow = { author: string; chain: string; family: string; total: number; count: number; biggest: number; biggestKind: LossKind; biggestToken: string; biggestSymbol: string; biggestLogo?: string };
 
 const store = createStore(DB_URL ? pgBackend(neonQuery(DB_URL)) : fileBackend());
-export const { listLosses, authorLosses, getLoss, addLoss, deleteLoss, payRespects, leaderboard, stats } = store;
+export const { listLosses, authorLosses, getLoss, addLoss, deleteLoss, payRespects, leaderboard, fumbleOfWeek, stats } = store;
