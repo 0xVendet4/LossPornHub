@@ -5,6 +5,7 @@ import { demoCandles, fetchCandles, type Candle } from "@/lib/candles";
 import { candlesMatch, peakAfter, peakWorthShowing, plotCandles } from "@/lib/candle-plot";
 import { amount, date, money, multiple, painUsd, price, usd } from "@/lib/format";
 import { scanWallet, ScanError } from "@/lib/scan";
+import { clientIp } from "@/lib/scan-cache";
 import { draftFromReport } from "@/lib/scan/draft";
 import { fuzz, toPublic } from "@/lib/privacy";
 import { getLoss } from "@/lib/store";
@@ -49,7 +50,7 @@ async function resolveLoss(req: NextRequest): Promise<PublicLoss | NextResponse>
 
   let report;
   try {
-    report = await scanWallet(wallet);
+    report = await scanWallet(wallet, { ip: clientIp(req) });
   } catch (e) {
     return fail(e instanceof ScanError ? e.message : "Couldn't read the wallet right now.", e instanceof ScanError ? e.status : 502);
   }

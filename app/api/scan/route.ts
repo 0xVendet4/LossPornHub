@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { scanWallet, ScanError } from "@/lib/scan";
 import { onVercel } from "@/lib/scan/errors";
+import { clientIp } from "@/lib/scan-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -20,14 +21,14 @@ export async function GET(req: NextRequest) {
   const trace = req.nextUrl.searchParams.get("trace") === "1";
   const budget = trace ? Number(req.nextUrl.searchParams.get("budget")) * 1000 || undefined : undefined;
   const t0 = Date.now();
-  const res = await answer(wallet, budget);
+  const res = await answer(wallet, budget, clientIp(req));
   if (!trace) return res;
   return NextResponse.json({ status: res.status, ms: Date.now() - t0, body: await res.json() });
 }
 
-async function answer(wallet: string, budget?: number) {
+async function answer(wallet: string, budgetMs: number | undefined, ip: string) {
   try {
-    return NextResponse.json(await scanWallet(wallet, budget));
+    return NextResponse.json(await scanWallet(wallet, { budgetMs, ip }));
   } catch (e) {
     if (e instanceof ScanError) return NextResponse.json({ error: e.message, code: e.code, hosted: onVercel }, { status: e.status });
     console.error(e);

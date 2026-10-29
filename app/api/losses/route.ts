@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { addLoss, listLosses, type NewLoss, type Sort } from "@/lib/store";
 import { parsePost, verifyPostSignature } from "@/lib/verify";
 import { scanWallet, ScanError } from "@/lib/scan";
+import { clientIp } from "@/lib/scan-cache";
 import { draftFromReport } from "@/lib/scan/draft";
 
 export const dynamic = "force-dynamic";
@@ -25,9 +26,9 @@ export async function POST(req: NextRequest) {
   // Os números vêm do raio-x feito aqui no servidor, nunca do navegador
   let report;
   try {
-    report = await scanWallet(r.wallet);
+    report = await scanWallet(r.wallet, { ip: clientIp(req) });
   } catch (e) {
-    return fail(e instanceof ScanError ? e.message : "Couldn't read the wallet right now.", 502);
+    return fail(e instanceof ScanError ? e.message : "Couldn't read the wallet right now.", e instanceof ScanError ? e.status : 502);
   }
 
   const draft = draftFromReport(report, r.target);

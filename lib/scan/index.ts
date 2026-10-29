@@ -7,6 +7,7 @@ import { addrKey, currentPrices, type Quote } from "./prices";
 import { buildReport } from "./report";
 import { demoReport } from "./demo";
 import type { Report, Swap } from "./types";
+import { hashIp, scanStore } from "../scan-cache";
 
 export { ScanError };
 
@@ -14,23 +15,61 @@ const TTL_MS = 15 * 60 * 1000;
 const cache = new Map<string, { report: Report; at: number }>();
 const inflight = new Map<string, Promise<Report>>();
 
-/** `budgetMs` encurta o prazo do raio-x (só para baixo), para testar o site de fora; esse resultado não vai para o cache. */
-export async function scanWallet(address: string, budgetMs?: number): Promise<Report> {
+// Raios-x novos (sem cache) por IP a cada 10 min: um pico de acesso não esgota a Etherscan e a Alchemy
+const LIMIT = 10;
+const WINDOW_MS = 10 * 60 * 1000;
+
+type Options = {
+  /** Encurta o prazo do raio-x (só para baixo), para testar o site de fora; esse resultado não vai para o cache. */
+  budgetMs?: number;
+  /** IP de quem pediu, para o limite. Sem IP (chamada interna, PC) não há limite. */
+  ip?: string;
+};
+
+export async function scanWallet(address: string, { budgetMs, ip }: Options = {}): Promise<Report> {
   if (address === "demo") return demoReport();
 
   const family = detectFamily(address);
   if (!family) throw new ScanError("Invalid address. Paste an EVM (0x…) or Solana address.", 400, "bad_address");
 
-  if (budgetMs) return run(address, family, Math.min(budgetMs, 25_000));
+  if (budgetMs) {
+    await allow(ip);
+    return run(address, family, Math.min(budgetMs, 25_000));
+  }
 
   const key = walletKey(address);
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.report;
+  // Guardado no banco vale para todas as instâncias da função
+  const saved = await scanStore.get(key, TTL_MS).catch(() => null);
+  if (saved) {
+    cache.set(key, { report: saved, at: saved.scannedAt });
+    return saved;
+  }
   if (inflight.has(key)) return inflight.get(key)!;
 
-  const job = run(address, family).finally(() => inflight.delete(key));
+  await allow(ip);
+  const job = run(address, family)
+    .then(async (report) => {
+      cache.set(key, { report, at: report.scannedAt });
+      await scanStore.set(key, report).catch((e) => console.error("scan cache:", e));
+      return report;
+    })
+    .finally(() => inflight.delete(key));
   inflight.set(key, job);
   return job;
+}
+
+/** Conta o raio-x novo desse IP; se o banco falhar, deixa passar. */
+async function allow(ip?: string) {
+  if (!ip) return;
+  const count = await scanStore.hit(hashIp(ip), WINDOW_MS).catch(() => 0);
+  if (count > LIMIT)
+    throw new ScanError(
+      "Too many scans from your connection. Wait a few minutes and try again. Wallets scanned in the last 15 minutes still load instantly.",
+      429,
+      "rate_limited",
+    );
 }
 
 async function run(wallet: string, family: "evm" | "solana", budgetMs = 25_000): Promise<Report> {
@@ -135,7 +174,6 @@ async function run(wallet: string, family: "evm" | "solana", budgetMs = 25_000):
     failedReasons,
     timing: { ...timing, total: Date.now() - t0 },
   };
-  if (budgetMs === 25_000) cache.set(walletKey(wallet), { report, at: Date.now() });
   return report;
 }
 

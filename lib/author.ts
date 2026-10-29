@@ -7,3 +7,6 @@ const SECRET = process.env.AUTHOR_SECRET || process.env.DATABASE_URL || process.
 
 /** Apelido público e estável de uma carteira: 8 caracteres hex que não deixam voltar ao endereço. */
 export const authorOf = (wallet: string) => (wallet === "example" ? "example" : createHmac("sha256", SECRET).update(walletKey(wallet)).digest("hex").slice(0, 8));
+
+/** Hash com o mesmo segredo, para guardar coisas como o IP sem guardar o valor em si. */
+export const privateHash = (value: string) => createHmac("sha256", SECRET).update(value).digest("hex").slice(0, 24);
