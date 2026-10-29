@@ -84,7 +84,7 @@ export default function About() {
           {[
             "Stablecoins: selling USDC isn't selling early.",
             "Token-for-token swaps with no SOL, ETH or stablecoin on either side: there's no way to know the dollar value at the time. We tell you how many were skipped.",
-            "Very active wallets: only the 500 most recent swaps per network are read.",
+            "Very active wallets: only the most recent swaps per network are read.",
             "Exchange sells, NFTs, staking and airdrops.",
           ].map((t) => (
             <li key={t} className="flex gap-3">

@@ -19,6 +19,12 @@ const CHAIN_ID: Partial<Record<ChainKey, number>> = {
   bsc: 56,
 };
 
+/**
+ * Desde nov/2025 o plano grátis da Etherscan não cobre Base, BNB e Optimism (entre outras).
+ * A primeira resposta "Free API access is not supported" marca a rede aqui, e os próximos raio-x já pulam ela.
+ */
+export const PAID_ONLY = new Set<ChainKey>();
+
 // Fila global com espaçamento, para respeitar o limite do plano grátis
 let last = 0;
 let queue: Promise<unknown> = Promise.resolve();
@@ -58,16 +64,24 @@ async function call(chain: ChainKey, params: Record<string, string | number>, ap
       continue;
     }
     if (/api key/i.test(text)) throw new ScanError(`Etherscan rejected the API key. Check ETHERSCAN_API_KEY in ${ENV_WHERE}.`, 500, "bad_key");
+    if (/free api access is not supported/i.test(text)) {
+      PAID_ONLY.add(chain);
+      throw new ScanError(`${chain} needs a paid Etherscan plan.`, 402, "paid_chain");
+    }
     if (/no transactions found|no records found/i.test(`${data.message} ${text}`)) return [];
     throw new ScanError(`Etherscan responded "${text || data.message}" for ${chain}.`);
   }
   throw new ScanError("Etherscan rate limit reached. Try again in a few minutes.", 429, "rate_limited");
 }
 
-/** Páginas mais recentes primeiro, até `maxPages` × `offset` registros. */
-async function pages(chain: ChainKey, action: string, wallet: string, apiKey: string, offset: number, maxPages: number) {
+/**
+ * Páginas mais recentes primeiro, até `maxPages` × `offset` registros.
+ * Para no `deadline` com o que já leu: melhor um raio-x parcial do que a função da Vercel estourar o tempo.
+ */
+async function pages(chain: ChainKey, action: string, wallet: string, apiKey: string, offset: number, maxPages: number, deadline: number) {
   const rows: Row[] = [];
   for (let page = 1; page <= maxPages; page++) {
+    if (Date.now() > deadline) return { rows, truncated: true };
     const got = await call(chain, { action, address: wallet, page, offset, sort: "desc", startblock: 0, endblock: 99_999_999 }, apiKey);
     rows.push(...got);
     if (got.length < offset) return { rows, truncated: false };
@@ -75,13 +89,13 @@ async function pages(chain: ChainKey, action: string, wallet: string, apiKey: st
   return { rows, truncated: true };
 }
 
-export async function fetchEvmSwaps(chain: ChainKey, wallet: string, apiKey: string) {
+export async function fetchEvmSwaps(chain: ChainKey, wallet: string, apiKey: string, deadline = Date.now() + 40_000) {
   const me = wallet.toLowerCase();
-  const tokens = await pages(chain, "tokentx", wallet, apiKey, 1000, 3);
+  const tokens = await pages(chain, "tokentx", wallet, apiKey, 1000, 3, deadline);
   if (tokens.rows.length === 0) return { swaps: [] as Swap[], truncated: false, unpriced: 0 };
 
-  const normal = await pages(chain, "txlist", wallet, apiKey, 1000, 2);
-  const internal = await pages(chain, "txlistinternal", wallet, apiKey, 1000, 2);
+  const normal = await pages(chain, "txlist", wallet, apiKey, 1000, 2, deadline);
+  const internal = await pages(chain, "txlistinternal", wallet, apiKey, 1000, 2, deadline);
 
   const byTx = new Map<string, { at: number; legs: Leg[] }>();
   const entry = (hash: string, ts: string) => {
@@ -117,5 +131,5 @@ export async function fetchEvmSwaps(chain: ChainKey, wallet: string, apiKey: str
     if (r === "unpriced") unpriced++;
     else if (r) swaps.push(...r);
   }
-  return { swaps, truncated: tokens.truncated, unpriced };
+  return { swaps, truncated: tokens.truncated || normal.truncated || internal.truncated, unpriced };
 }

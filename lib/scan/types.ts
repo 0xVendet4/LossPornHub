@@ -51,5 +51,7 @@ export type Report = {
   totals: { missedUsd: number; realizedLossUsd: number; realizedGainUsd: number; unpriced: number };
   /** Swaps que ficaram de fora por não ter como saber o valor em dólar (token por token, sem SOL/ETH/stable). */
   unpricedSwaps?: number;
+  /** Redes EVM puladas porque o plano grátis da Etherscan não cobre (Base, BNB, Optimism). */
+  paidChains?: ChainKey[];
   demo?: boolean;
 };

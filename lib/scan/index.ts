@@ -1,6 +1,6 @@
 import { EVM_CHAINS, detectFamily, walletKey, type ChainKey } from "../chains";
 import { ENV_WHERE, ScanError } from "./errors";
-import { fetchEvmSwaps } from "./etherscan";
+import { PAID_ONLY, fetchEvmSwaps } from "./etherscan";
 import { fetchSolanaMetadata, fetchSolanaSwaps } from "./helius";
 import { addrKey, currentPrices, type Quote } from "./prices";
 import { buildReport } from "./report";
@@ -30,7 +30,11 @@ export async function scanWallet(address: string): Promise<Report> {
 }
 
 async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
-  const chains: ChainKey[] = family === "evm" ? EVM_CHAINS : ["solana"];
+  // Redes que a Etherscan já disse que exigem plano pago ficam de fora sem gastar chamada
+  const paidChains: ChainKey[] = family === "evm" ? EVM_CHAINS.filter((c) => PAID_ONLY.has(c)) : [];
+  const chains: ChainKey[] = family === "evm" ? EVM_CHAINS.filter((c) => !PAID_ONLY.has(c)) : ["solana"];
+  // A função da Vercel tem 60 s; o raio-x EVM para de paginar em 40 s e usa o que já leu
+  const deadline = Date.now() + 40_000;
   const apiKey = family === "evm" ? process.env.ETHERSCAN_API_KEY : process.env.HELIUS_API_KEY;
   if (!apiKey)
     throw new ScanError(
@@ -42,7 +46,7 @@ async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
     );
 
   const results = await Promise.allSettled(
-    chains.map((c) => (c === "solana" ? fetchSolanaSwaps(wallet, apiKey) : fetchEvmSwaps(c, wallet, apiKey)))
+    chains.map((c) => (c === "solana" ? fetchSolanaSwaps(wallet, apiKey) : fetchEvmSwaps(c, wallet, apiKey, deadline)))
   );
 
   const swaps: Swap[] = [];
@@ -55,12 +59,15 @@ async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
       swaps.push(...r.value.swaps);
       truncated ||= r.value.truncated;
       unpricedSwaps += r.value.unpriced;
+    } else if (r.reason instanceof ScanError && r.reason.code === "paid_chain") {
+      paidChains.push(chains[i]);
     } else {
       failedChains.push(chains[i]);
       firstError ??= r.reason;
     }
   });
-  if (failedChains.length === chains.length) throw firstError;
+  const read = chains.filter((c) => !failedChains.includes(c) && !paidChains.includes(c));
+  if (read.length === 0) throw firstError ?? new ScanError("None of the EVM networks we read are on the free Etherscan plan.", 402, "paid_chain");
 
   // Preço atual só dos tokens vendidos, agrupados por rede
   const byChain = new Map<ChainKey, string[]>();
@@ -82,13 +89,14 @@ async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
     ...buildReport({
       family,
       wallet,
-      chains: chains.filter((c) => !failedChains.includes(c)),
+      chains: read,
       failedChains,
       swaps,
       truncated,
       prices,
     }),
     unpricedSwaps,
+    paidChains,
   };
   cache.set(walletKey(wallet), { report, at: Date.now() });
   return report;
