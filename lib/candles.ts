@@ -52,15 +52,20 @@ function frame(since: number) {
 
 /** Do pouco antes da venda até agora. Lista vazia quando o token não tem pool ou a GeckoTerminal não respondeu. */
 export async function fetchCandles(chain: ChainKey, token: string, since: number, pool?: string | null): Promise<Candle[]> {
+  return (await candlesWithReason(chain, token, since, pool)).candles;
+}
+
+/** Igual a `fetchCandles`, com o motivo quando não vem nada (a rota devolve, para dar para depurar pelo navegador). */
+export async function candlesWithReason(chain: ChainKey, token: string, since: number, pool?: string | null): Promise<{ candles: Candle[]; reason?: string }> {
   const { tf, agg, step } = frame(since);
   // Um trecho antes da venda dá contexto: dá para ver de onde o preço vinha
   const from = since - Math.max((Date.now() - since) * 0.15, 4 * step);
   const key = `${chain}:${addrKey(chain, token)}:${tf}${agg}:${Math.floor(from / step)}`;
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.candles;
+  if (hit && Date.now() - hit.at < TTL_MS) return { candles: hit.candles };
 
   const found = pool || (await findPool(chain, token));
-  if (!found) return [];
+  if (!found) return { candles: [], reason: "no pool on DexScreener" };
   const p = chain === "solana" ? found : found.toLowerCase();
   const limit = Math.min(1000, Math.ceil((Date.now() - from) / step) + 1);
   try {
@@ -68,7 +73,7 @@ export async function fetchCandles(chain: ChainKey, token: string, since: number
       `https://api.geckoterminal.com/api/v2/networks/${NETWORK[chain]}/pools/${p}/ohlcv/${tf}?aggregate=${agg}&limit=${limit}&currency=usd&token=${token}`,
       { headers: { accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(10_000) },
     );
-    if (!res.ok) return [];
+    if (!res.ok) return { candles: [], reason: `geckoterminal ${res.status}: ${(await res.text()).slice(0, 160)}` };
     const data = (await res.json()) as { data?: { attributes?: { ohlcv_list?: (number | string)[][] } } };
     const rows = data.data?.attributes?.ohlcv_list ?? [];
     const candles = rows
@@ -77,9 +82,9 @@ export async function fetchCandles(chain: ChainKey, token: string, since: number
       .sort((a, b) => a.t - b.t);
     const out = merge(candles, MAX_CANDLES);
     if (out.length > 0) cache.set(key, { at: Date.now(), candles: out });
-    return out;
-  } catch {
-    return [];
+    return out.length > 0 ? { candles: out } : { candles: [], reason: `geckoterminal returned ${rows.length} rows, none after the sell` };
+  } catch (e) {
+    return { candles: [], reason: `geckoterminal failed: ${(e as Error).message}` };
   }
 }
 

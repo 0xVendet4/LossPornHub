@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { detectFamily, isChainKey } from "@/lib/chains";
-import { demoCandles, fetchCandles } from "@/lib/candles";
+import { demoCandles, candlesWithReason } from "@/lib/candles";
 
 /** Candles do token desde um pouco antes da venda. Sempre responde 200: lista vazia faz o site cair no gráfico simples. */
 export async function GET(req: NextRequest) {
@@ -20,9 +20,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ candles: demoCandles(token, since, from, to) });
   }
 
-  const candles = await fetchCandles(chain, token, since, pool);
+  const { candles, reason } = await candlesWithReason(chain, token, since, pool);
   return NextResponse.json(
-    { candles },
+    { candles, reason },
     { headers: { "Cache-Control": candles.length ? "public, s-maxage=600, stale-while-revalidate=1200" : "no-store" } },
   );
 }
