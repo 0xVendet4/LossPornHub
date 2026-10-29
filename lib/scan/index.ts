@@ -131,7 +131,9 @@ async function run(wallet: string, family: "evm" | "solana", budgetMs = 25_000):
     if (r.status === "fulfilled") {
       swaps.push(...r.value.swaps);
       truncated ||= r.value.truncated;
-      if (r.value.truncated && r.value.swaps.length) completeSince = Math.max(completeSince ?? 0, Math.min(...r.value.swaps.map((s) => s.at)));
+      const v = r.value as { swaps: Swap[]; from?: number };
+      const from = v.from ?? (v.swaps.length ? Math.min(...v.swaps.map((s) => s.at)) : undefined);
+      if (r.value.truncated && from) completeSince = Math.max(completeSince ?? 0, from);
       unpricedSwaps += r.value.unpriced;
     } else if (r.reason instanceof ScanError && r.reason.code === "paid_chain") {
       paidChains.push(chains[i]);

@@ -77,28 +77,44 @@ async function call(chain: ChainKey, params: Record<string, string | number>, ap
   throw new ScanError("Etherscan rate limit reached. Try again in a few minutes.", 429, "rate_limited");
 }
 
-/**
- * Páginas mais recentes primeiro, até `maxPages` × `offset` registros.
- * Para no `deadline` com o que já leu: melhor um raio-x parcial do que a função da Vercel estourar o tempo.
- */
-async function pages(chain: ChainKey, action: string, wallet: string, apiKey: string, offset: number, maxPages: number, deadline: number) {
-  const rows: Row[] = [];
-  for (let page = 1; page <= maxPages; page++) {
-    if (Date.now() > deadline) return { rows, truncated: true };
-    const got = await call(chain, { action, address: wallet, page, offset, sort: "desc", startblock: 0, endblock: 99_999_999 }, apiKey, deadline);
-    rows.push(...got);
-    if (got.length < offset) return { rows, truncated: false };
-  }
-  return { rows, truncated: true };
+// A Etherscan não passa de 10.000 registros por consulta (página × tamanho)
+const MAX_PAGES = 10;
+const PAGE = 1000;
+
+/** Uma lista da Etherscan lida das páginas mais recentes para trás; `oldest` é a hora do último registro lido. */
+type List = { action: string; rows: Row[]; page: number; done: boolean; oldest: number };
+const list = (action: string): List => ({ action, rows: [], page: 0, done: false, oldest: Infinity });
+
+async function next(chain: ChainKey, l: List, wallet: string, apiKey: string, deadline: number) {
+  const got = await call(chain, { action: l.action, address: wallet, page: l.page + 1, offset: PAGE, sort: "desc", startblock: 0, endblock: 99_999_999 }, apiKey, deadline);
+  l.page++;
+  l.rows.push(...got);
+  if (got.length) l.oldest = Number(got[got.length - 1].timeStamp) * 1000;
+  l.done = got.length < PAGE;
 }
 
+/**
+ * Lê as transferências de token e, junto, as de ETH (normais e internas) até a mesma data, para cada swap ter
+ * as duas pontas. Para no `deadline` com o que já leu: melhor um raio-x parcial do que a função da Vercel estourar.
+ */
 export async function fetchEvmSwaps(chain: ChainKey, wallet: string, apiKey: string, deadline = Date.now() + 30_000) {
   const me = wallet.toLowerCase();
-  const tokens = await pages(chain, "tokentx", wallet, apiKey, 1000, 3, deadline);
-  if (tokens.rows.length === 0) return { swaps: [] as Swap[], truncated: false, unpriced: 0 };
+  const tokens = list("tokentx");
+  const normal = list("txlist");
+  const internal = list("txlistinternal");
+  const open = (l: List) => !l.done && l.page < MAX_PAGES && Date.now() <= deadline;
+  const catchUp = async (l: List) => {
+    while (open(l) && l.oldest > tokens.oldest) await next(chain, l, wallet, apiKey, deadline);
+  };
+  do {
+    await next(chain, tokens, wallet, apiKey, deadline);
+    if (tokens.rows.length === 0) return { swaps: [] as Swap[], truncated: false, unpriced: 0 };
+    await Promise.all([catchUp(normal), catchUp(internal)]);
+  } while (open(tokens));
 
-  const normal = await pages(chain, "txlist", wallet, apiKey, 1000, 2, deadline);
-  const internal = await pages(chain, "txlistinternal", wallet, apiKey, 1000, 2, deadline);
+  // Daqui para trás alguma lista ficou sem ler: swaps mais antigos podem faltar
+  const cover = (l: List) => (l.done || (l !== tokens && tokens.done && l.oldest <= tokens.oldest) ? -Infinity : l.oldest);
+  const from = Math.max(cover(tokens), cover(normal), cover(internal));
 
   const byTx = new Map<string, { at: number; legs: Leg[] }>();
   const entry = (hash: string, ts: string) => {
@@ -134,5 +150,5 @@ export async function fetchEvmSwaps(chain: ChainKey, wallet: string, apiKey: str
     if (r === "unpriced") unpriced++;
     else if (r) swaps.push(...r);
   }
-  return { swaps, truncated: tokens.truncated || normal.truncated || internal.truncated, unpriced };
+  return from > -Infinity ? { swaps, truncated: true, unpriced, from } : { swaps, truncated: false, unpriced };
 }

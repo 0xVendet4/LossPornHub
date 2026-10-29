@@ -20,8 +20,8 @@ export const ALCHEMY_SLUG: Partial<Record<ChainKey, string>> = {
 
 // Redes onde o Transfers API lista transferências internas; nas outras, diferença de saldo
 const INTERNAL = new Set<ChainKey>(["base"]);
-const MAX_PAGES = 3;
-const MAX_BALANCE_LOOKUPS = 48;
+const MAX_PAGES = 10;
+const MAX_BALANCE_LOOKUPS = 200;
 
 // Fila global: cada página do Transfers API custa ~150 CUs e o plano grátis aguenta 300 por segundo
 let last = 0;
@@ -107,11 +107,13 @@ type Transfer = {
   metadata?: { blockTimestamp?: string };
 };
 
+/** Transferências de um lado, das mais recentes para trás. `done` quando a lista acabou; `oldest`, a hora da última lida. */
 async function transfers(chain: ChainKey, wallet: string, apiKey: string, side: "fromAddress" | "toAddress", deadline: number) {
   const rows: Transfer[] = [];
   let pageKey: string | undefined;
+  const oldest = () => Date.parse(rows[rows.length - 1]?.metadata?.blockTimestamp ?? "") || Infinity;
   for (let page = 0; page < MAX_PAGES; page++) {
-    if (Date.now() > deadline) return { rows, truncated: true };
+    if (Date.now() > deadline) return { rows, done: false, oldest: oldest() };
     const category = INTERNAL.has(chain) ? ["external", "internal", "erc20"] : ["external", "erc20"];
     const params = { fromBlock: "0x0", toBlock: "latest", [side]: wallet, category, withMetadata: true, excludeZeroValue: true, maxCount: "0x3e8", order: "desc", ...(pageKey ? { pageKey } : {}) };
     let result: { transfers?: Transfer[]; pageKey?: string };
@@ -128,9 +130,9 @@ async function transfers(chain: ChainKey, wallet: string, apiKey: string, side: 
     }
     rows.push(...(result.transfers ?? []));
     pageKey = result.pageKey;
-    if (!pageKey) return { rows, truncated: false };
+    if (!pageKey) return { rows, done: true, oldest: oldest() };
   }
-  return { rows, truncated: true };
+  return { rows, done: false, oldest: oldest() };
 }
 
 /** Valor bruto → quantidade, sem perder precisão em tokens de 18 casas. Aceita negativo (diferença de saldo). */
@@ -145,7 +147,8 @@ function units(raw: bigint | string | null | undefined, decimals: number): numbe
 export async function fetchAlchemySwaps(chain: ChainKey, wallet: string, apiKey: string, deadline = Date.now() + 30_000) {
   const me = wallet.toLowerCase();
   const [out, inc] = await Promise.all([transfers(chain, wallet, apiKey, "fromAddress", deadline), transfers(chain, wallet, apiKey, "toAddress", deadline)]);
-  let truncated = out.truncated || inc.truncated;
+  // Daqui para trás algum lado ficou sem ler: swaps mais antigos podem faltar
+  let from = Math.max(out.done ? -Infinity : out.oldest, inc.done ? -Infinity : inc.oldest);
 
   const native = NATIVE[chain];
   const byTx = new Map<string, { at: number; block: number; legs: Leg[] }>();
@@ -171,12 +174,9 @@ export async function fetchAlchemySwaps(chain: ChainKey, wallet: string, apiKey:
     const pending = [...byTx.entries()]
       .filter(([, e]) => e.legs.some((l) => l.side === "out" && l.address !== native.address) && !e.legs.some((l) => l.side === "in"))
       .sort((a, b) => b[1].block - a[1].block);
-    if (pending.length > MAX_BALANCE_LOOKUPS) truncated = true;
+    let looked = 0;
     for (let i = 0; i < Math.min(pending.length, MAX_BALANCE_LOOKUPS); i += 8) {
-      if (Date.now() > deadline) {
-        truncated = true;
-        break;
-      }
+      if (Date.now() > deadline) break;
       const chunk = pending.slice(i, i + 8);
       const calls = chunk.flatMap(([, e]) => [
         { method: "eth_getBalance", params: [wallet, `0x${(e.block - 1).toString(16)}`] },
@@ -188,7 +188,10 @@ export async function fetchAlchemySwaps(chain: ChainKey, wallet: string, apiKey:
         const got = units(BigInt(balances[2 * j + 1]) - BigInt(balances[2 * j]), 18) + sent;
         if (got > 1e-9) e.legs.push({ address: native.address, symbol: native.symbol, name: native.name, amount: got, side: "in" });
       });
+      looked = i + chunk.length;
     }
+    // Vendas mais antigas que a última consultada ficaram sem o ETH recebido
+    if (looked < pending.length) from = Math.max(from, pending[Math.max(0, looked - 1)][1].at);
   }
 
   const swaps: Swap[] = [];
@@ -199,5 +202,5 @@ export async function fetchAlchemySwaps(chain: ChainKey, wallet: string, apiKey:
     if (r === "unpriced") unpriced++;
     else if (r) swaps.push(...r);
   }
-  return { swaps, truncated, unpriced };
+  return from > -Infinity ? { swaps, truncated: true, unpriced, from } : { swaps, truncated: false, unpriced };
 }
