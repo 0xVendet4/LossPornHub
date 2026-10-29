@@ -1,5 +1,5 @@
 import type { ChainKey } from "../chains";
-import { ENV_WHERE, ScanError, sleep } from "./errors";
+import { ENV_WHERE, ScanError, sleep, until } from "./errors";
 import { NATIVE, swapFromLegs, type Leg } from "./legs";
 import type { Swap } from "./types";
 
@@ -42,7 +42,7 @@ function throttled<T>(fn: () => Promise<T>): Promise<T> {
 
 type Row = Record<string, string>;
 
-async function call(chain: ChainKey, params: Record<string, string | number>, apiKey: string): Promise<Row[]> {
+async function call(chain: ChainKey, params: Record<string, string | number>, apiKey: string, deadline: number): Promise<Row[]> {
   for (let attempt = 0; attempt < 3; attempt++) {
     const url = new URL(BASE);
     url.searchParams.set("chainid", String(CHAIN_ID[chain]));
@@ -50,7 +50,7 @@ async function call(chain: ChainKey, params: Record<string, string | number>, ap
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
     url.searchParams.set("apikey", apiKey);
 
-    const res = await throttled(() => fetch(url, { cache: "no-store", signal: AbortSignal.timeout(20_000) }));
+    const res = await throttled(() => fetch(url, { cache: "no-store", signal: until(deadline) }));
     if (res.status === 429) {
       await sleep(1200);
       continue;
@@ -83,14 +83,14 @@ async function pages(chain: ChainKey, action: string, wallet: string, apiKey: st
   const rows: Row[] = [];
   for (let page = 1; page <= maxPages; page++) {
     if (Date.now() > deadline) return { rows, truncated: true };
-    const got = await call(chain, { action, address: wallet, page, offset, sort: "desc", startblock: 0, endblock: 99_999_999 }, apiKey);
+    const got = await call(chain, { action, address: wallet, page, offset, sort: "desc", startblock: 0, endblock: 99_999_999 }, apiKey, deadline);
     rows.push(...got);
     if (got.length < offset) return { rows, truncated: false };
   }
   return { rows, truncated: true };
 }
 
-export async function fetchEvmSwaps(chain: ChainKey, wallet: string, apiKey: string, deadline = Date.now() + 40_000) {
+export async function fetchEvmSwaps(chain: ChainKey, wallet: string, apiKey: string, deadline = Date.now() + 30_000) {
   const me = wallet.toLowerCase();
   const tokens = await pages(chain, "tokentx", wallet, apiKey, 1000, 3, deadline);
   if (tokens.rows.length === 0) return { swaps: [] as Swap[], truncated: false, unpriced: 0 };

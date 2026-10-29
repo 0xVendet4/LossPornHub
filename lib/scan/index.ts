@@ -37,8 +37,9 @@ async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
   const viaAlchemy = (c: ChainKey) => !!alchemyKey && !!ALCHEMY_SLUG[c];
   const paidChains: ChainKey[] = family === "evm" ? EVM_CHAINS.filter((c) => PAID_ONLY.has(c) && !viaAlchemy(c)) : [];
   const chains: ChainKey[] = family === "evm" ? EVM_CHAINS.filter((c) => !paidChains.includes(c)) : ["solana"];
-  // A função da Vercel tem 60 s; o raio-x EVM para de paginar em 40 s e usa o que já leu
-  const deadline = Date.now() + 40_000;
+  // A função da Vercel tem 60 s; o raio-x EVM para de paginar em 30 s e usa o que já leu
+  // (chamadas em andamento ainda têm alguns segundos, e depois vem o preço de hoje)
+  const deadline = Date.now() + 30_000;
   const apiKey = family === "evm" ? process.env.ETHERSCAN_API_KEY : process.env.HELIUS_API_KEY;
   if (!apiKey)
     throw new ScanError(

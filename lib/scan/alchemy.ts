@@ -1,5 +1,5 @@
 import type { ChainKey } from "../chains";
-import { ENV_WHERE, ScanError, sleep } from "./errors";
+import { ENV_WHERE, ScanError, sleep, until } from "./errors";
 import { NATIVE, swapFromLegs, type Leg } from "./legs";
 import type { Swap } from "./types";
 
@@ -22,7 +22,7 @@ export const ALCHEMY_SLUG: Partial<Record<ChainKey, string>> = {
 // Redes onde o Transfers API lista transferências internas; nas outras, diferença de saldo
 const INTERNAL = new Set<ChainKey>(["base"]);
 const MAX_PAGES = 3;
-const MAX_BALANCE_LOOKUPS = 80;
+const MAX_BALANCE_LOOKUPS = 48;
 
 // Fila global: cada página do Transfers API custa ~150 CUs e o plano grátis aguenta 300 por segundo
 let last = 0;
@@ -43,7 +43,7 @@ const NAME: Partial<Record<ChainKey, string>> = { base: "Base", optimism: "Optim
 type RpcCall = { method: string; params: unknown[] };
 type RpcReply = { id?: number; result?: unknown; error?: { code?: number; message?: string } };
 
-async function rpc(chain: ChainKey, apiKey: string, calls: RpcCall[], gap: number): Promise<unknown[]> {
+async function rpc(chain: ChainKey, apiKey: string, calls: RpcCall[], gap: number, deadline: number): Promise<unknown[]> {
   const body = calls.map((c, id) => ({ jsonrpc: "2.0", id, ...c }));
   for (let attempt = 0; attempt < 4; attempt++) {
     const res = await throttled(gap, () =>
@@ -52,7 +52,7 @@ async function rpc(chain: ChainKey, apiKey: string, calls: RpcCall[], gap: numbe
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body.length === 1 ? body[0] : body),
         cache: "no-store",
-        signal: AbortSignal.timeout(20_000),
+        signal: until(deadline),
       }),
     );
     const text = await res.text();
@@ -101,7 +101,7 @@ async function transfers(chain: ChainKey, wallet: string, apiKey: string, side: 
     const params = { fromBlock: "0x0", toBlock: "latest", [side]: wallet, category, withMetadata: true, excludeZeroValue: true, maxCount: "0x3e8", order: "desc", ...(pageKey ? { pageKey } : {}) };
     let result: { transfers?: Transfer[]; pageKey?: string };
     try {
-      [result] = (await rpc(chain, apiKey, [{ method: "alchemy_getAssetTransfers", params: [params] }], 520)) as [typeof result];
+      [result] = (await rpc(chain, apiKey, [{ method: "alchemy_getAssetTransfers", params: [params] }], 520, deadline)) as [typeof result];
     } catch (e) {
       // Rede sem transferências internas no Transfers API: tenta de novo sem, e a diferença de saldo cobre o ETH
       if (e instanceof ScanError && /internal/i.test(e.message) && category.includes("internal")) {
@@ -127,7 +127,7 @@ function units(raw: bigint | string | null | undefined, decimals: number): numbe
   return Number(v / base) + Number(v % base) / Number(base);
 }
 
-export async function fetchAlchemySwaps(chain: ChainKey, wallet: string, apiKey: string, deadline = Date.now() + 40_000) {
+export async function fetchAlchemySwaps(chain: ChainKey, wallet: string, apiKey: string, deadline = Date.now() + 30_000) {
   const me = wallet.toLowerCase();
   const [out, inc] = await Promise.all([transfers(chain, wallet, apiKey, "fromAddress", deadline), transfers(chain, wallet, apiKey, "toAddress", deadline)]);
   let truncated = out.truncated || inc.truncated;
@@ -167,7 +167,7 @@ export async function fetchAlchemySwaps(chain: ChainKey, wallet: string, apiKey:
         { method: "eth_getBalance", params: [wallet, `0x${(e.block - 1).toString(16)}`] },
         { method: "eth_getBalance", params: [wallet, `0x${e.block.toString(16)}`] },
       ]);
-      const balances = (await rpc(chain, apiKey, calls, 650)) as string[];
+      const balances = (await rpc(chain, apiKey, calls, 650, deadline)) as string[];
       chunk.forEach(([, e], j) => {
         const sent = e.legs.filter((l) => l.side === "out" && l.address === native.address).reduce((n, l) => n + l.amount, 0);
         const got = units(BigInt(balances[2 * j + 1]) - BigInt(balances[2 * j]), 18) + sent;
