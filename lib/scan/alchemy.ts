@@ -65,7 +65,11 @@ async function rpc(chain: ChainKey, apiKey: string, calls: RpcCall[], gap: numbe
     if (res.status === 401 || /must be authenticated|invalid api key|unauthorized/i.test(text.slice(0, 300)))
       throw new ScanError(`Alchemy rejected the API key. Check ALCHEMY_API_KEY in ${ENV_WHERE}.`, 500, "bad_key");
     if (res.status === 403 || /not enabled|not allowed|is not available/i.test(text.slice(0, 300)))
-      throw new ScanError(`${NAME[chain]} isn't turned on in your Alchemy app. Turn it on in the Alchemy dashboard, under Networks.`, 502, "chain_disabled");
+      throw new ScanError(
+        `${NAME[chain]} isn't turned on in your Alchemy app. Turn it on in the Alchemy dashboard, under Networks. (Alchemy said: "${said(text)}")`,
+        502,
+        "chain_disabled",
+      );
     if (!res.ok) throw new ScanError(`Alchemy responded ${res.status} for ${NAME[chain]}.`);
 
     const parsed = JSON.parse(text) as RpcReply | RpcReply[];
@@ -81,6 +85,16 @@ async function rpc(chain: ChainKey, apiKey: string, calls: RpcCall[], gap: numbe
     return replies.map((r) => r.result);
   }
   throw new ScanError("Alchemy rate limit reached. Try again in a minute.", 429, "rate_limited");
+}
+
+/** A mensagem de erro da própria Alchemy, curta e sem links (que trazem o id do app), para saber o motivo exato. */
+function said(text: string) {
+  let msg = text;
+  try {
+    const j = JSON.parse(text);
+    msg = (Array.isArray(j) ? j.find((r) => r?.error)?.error?.message : j?.error?.message) || text;
+  } catch {}
+  return msg.replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim().slice(0, 160);
 }
 
 type Transfer = {
