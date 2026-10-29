@@ -18,12 +18,31 @@ export type Scene = {
   soldUsd: number;
   host: string;
   fonts: { display: string; sans: string };
+  /** Candle de máxima depois da venda, quando ficou bem acima de hoje: o vídeo para nele e mostra quanto valia. */
+  peak?: { i: number; price: number; at: number };
 };
 
 export const INTRO = 0.6;
 export const REVEAL = 5.8;
+export const PAUSE = 1.8;
 export const HOLD = 2.6;
-export const DURATION = INTRO + REVEAL + HOLD;
+export const durationOf = (s: Scene) => INTRO + REVEAL + (s.peak ? PAUSE : 0) + HOLD;
+
+/**
+ * Quanto dos candles já apareceu (0 a 1) no tempo t. Com pico, a revelação desacelera até ele, fica parada
+ * PAUSE segundos e depois segue até hoje; `atPeak` é o quanto a pausa está visível (0 a 1, com fade).
+ */
+function progress(s: Scene, t: number) {
+  const tr = t - INTRO;
+  if (!s.peak) return { reveal: smooth(clamp(tr / REVEAL)), atPeak: 0, pastPeak: false };
+  const p = (s.peak.i + 1) / s.candles.length;
+  const a = Math.max(0.001, REVEAL * p);
+  const b = Math.max(0.001, REVEAL - a);
+  const reveal = tr < a ? p * smooth(clamp(tr / a)) : tr < a + PAUSE ? p : p + (1 - p) * smooth(clamp((tr - a - PAUSE) / b));
+  const fade = 0.25;
+  const atPeak = tr < a || tr > a + PAUSE ? 0 : Math.min(1, (tr - a) / fade, (a + PAUSE - tr) / fade);
+  return { reveal, atPeak, pastPeak: tr >= a };
+}
 
 const C = {
   bg1: "#1a1626",
@@ -143,7 +162,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, W: number, H: number, s
   const plot = plotCandles(s.candles, s.sellAt, s.sellPrice, box);
   const n = s.candles.length;
   const slot = box.w / n;
-  const reveal = smooth(clamp((t - INTRO) / REVEAL));
+  const { reveal, atPeak, pastPeak } = progress(s, t);
   const f = reveal * n;
   const full = Math.floor(f);
   const frac = f - full;
@@ -164,27 +183,39 @@ export function drawFrame(ctx: CanvasRenderingContext2D, W: number, H: number, s
       ? Math.max(0, (s.amountUsd * (cur - s.sellPrice)) / (lastClose - s.sellPrice))
       : Math.max(0, s.soldAmount * cur - s.soldUsd);
   const shown = reveal >= 1 ? s.amountUsd : value;
+  const peakWorth = s.peak ? Number(((s.soldUsd * s.peak.price) / s.sellPrice).toPrecision(3)) : 0;
 
-  // Título e número
+  // Título e número. Na pausa do pico, o número vira quanto o que foi vendido valia no topo
   const ly = top + (wide ? 190 : 150);
-  ctx.fillStyle = C.loss;
-  ctx.font = `600 32px ${sans}`;
-  ctx.fillText("Left on the table", textX, ly);
-  const pulse = t > INTRO + REVEAL ? 1 + 0.025 * Math.sin((t - INTRO - REVEAL) * 5) : 1;
-  ctx.save();
-  ctx.translate(textX, ly + (wide ? 110 : 100));
-  ctx.scale(pulse, pulse);
-  ctx.fillStyle = C.fg;
-  ctx.font = `700 ${wide ? 150 : 136}px ${display}`;
-  ctx.fillText(money(shown), -4, 0);
-  ctx.restore();
-  ctx.fillStyle = C.dim;
-  ctx.font = `400 30px ${sans}`;
   const mult = cur / s.sellPrice;
-  ctx.fillText(sold && mult > 1 ? `Up ${multiple(mult)} since you sold` : "Watch what happened after the sell", textX, ly + (wide ? 200 : 180));
+  const pulse = t > durationOf(s) - HOLD ? 1 + 0.025 * Math.sin((t - durationOf(s) + HOLD) * 5) : 1;
+  const headline = (alpha: number, title: string, color: string, n: number, sub: string) => {
+    if (alpha <= 0) return;
+    ctx.save();
+    ctx.globalAlpha *= alpha;
+    ctx.fillStyle = color;
+    ctx.font = `600 32px ${sans}`;
+    ctx.fillText(title, textX, ly);
+    ctx.save();
+    ctx.translate(textX, ly + (wide ? 110 : 100));
+    ctx.scale(pulse, pulse);
+    ctx.fillStyle = C.fg;
+    ctx.font = `700 ${wide ? 150 : 136}px ${display}`;
+    ctx.fillText(money(n), -4, 0);
+    ctx.restore();
+    ctx.fillStyle = C.dim;
+    ctx.font = `400 30px ${sans}`;
+    ctx.fillText(sub, textX, ly + (wide ? 200 : 180));
+    ctx.restore();
+  };
+  headline(1 - atPeak, "Left on the table", C.loss, shown, sold && mult > 1 ? `Up ${multiple(mult)} since you sold` : "Watch what happened after the sell");
+  if (s.peak) headline(atPeak, "Worth at the peak", C.lilac, peakWorth, `${date(s.peak.at)} · ${multiple(s.peak.price / s.sellPrice)} above your sell`);
   if (wide) {
+    ctx.fillStyle = C.dim;
+    ctx.font = `400 30px ${sans}`;
     ctx.fillText(`Sold ${money(s.soldUsd)} worth of $${s.symbol.toUpperCase()}.`, textX, ly + 300);
     ctx.fillText(`It'd be worth ${money(s.soldUsd + shown)} now.`, textX, ly + 345);
+    if (s.peak && pastPeak) ctx.fillText(`At the peak it was worth ${money(peakWorth)}.`, textX, ly + 390);
   }
 
   // Painel do gráfico
@@ -256,6 +287,26 @@ export function drawFrame(ctx: CanvasRenderingContext2D, W: number, H: number, s
     ctx.stroke();
     const below = plot.sell.y < box.y + 70;
     pill(ctx, `You sold here · ${price(s.sellPrice)}`, Math.min(plot.sell.x + 18, box.x + box.w - 300), plot.sell.y + (below ? 44 : -44), 22, sans, C.fg, C.raise);
+  }
+
+  // Pico: ponto lilás desde que o candle dele apareceu; na pausa, a etiqueta com o valor
+  if (s.peak && plot.peak && pastPeak) {
+    const { x, y } = plot.peak;
+    ctx.fillStyle = C.lilac;
+    ctx.strokeStyle = C.card;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(x, y, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // À esquerda do ponto, na mesma altura: o pico é o ponto mais alto, então ali os candles estão mais baixos
+    // e a etiqueta não briga com a do preço de hoje, na borda direita
+    ctx.font = `600 22px ${sans}`;
+    const label = `Peak · ${money(peakWorth)}`;
+    const w = ctx.measureText(label).width + 24;
+    const px = Math.max(box.x, x - 22 - w);
+    const py = px === box.x ? y - 40 : y;
+    pill(ctx, label, px, py, 22, sans, atPeak > 0 ? "#17131f" : C.lilac, atPeak > 0 ? C.lilac : "rgba(185,167,255,0.16)");
   }
 
   // Preço do momento, na borda direita

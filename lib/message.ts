@@ -12,3 +12,8 @@ export function buildPostMessage(p: { wallet: string; target: string; caption: s
     `Timestamp: ${p.timestamp}`,
   ].join("\n");
 }
+
+/** Mensagem para apagar um post. O servidor só aceita a assinatura da carteira que postou. */
+export function buildDeleteMessage(p: { wallet: string; id: string; timestamp: number }): string {
+  return ["LossPornHub: I want to delete my post.", "", `Wallet: ${p.wallet}`, `Post: ${p.id}`, `Timestamp: ${p.timestamp}`].join("\n");
+}

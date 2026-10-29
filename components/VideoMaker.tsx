@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CHAINS } from "@/lib/chains";
-import { candlesMatch } from "@/lib/candle-plot";
-import { DURATION, drawFrame, type Scene } from "@/lib/timelapse";
+import { candlesMatch, peakAfter, peakWorthShowing } from "@/lib/candle-plot";
+import { drawFrame, durationOf, type Scene } from "@/lib/timelapse";
 import type { PublicLoss } from "@/lib/types";
 import { candlesUrl, loadCandles } from "./CandleChart";
 import { IconDownload, IconShare } from "./Icons";
@@ -59,8 +59,10 @@ export default function VideoMaker({ loss, demo, layout, children }: { loss: Pub
     const fonts = { display: css.getPropertyValue("--font-sora").trim() || "sans-serif", sans: css.getPropertyValue("--font-figtree").trim() || "sans-serif" };
     await Promise.all([document.fonts.load(`700 40px ${fonts.display}`), document.fonts.load(`600 30px ${fonts.sans}`), document.fonts.load(`400 30px ${fonts.sans}`)]).catch(() => {});
 
+    const peak = peakAfter(candles, loss.lastSellAt!);
     const scene: Scene = {
       candles,
+      peak: peak && peakWorthShowing(peak.price, nowPrice) ? peak : undefined,
       sellAt: loss.lastSellAt!,
       sellPrice,
       symbol: loss.token,
@@ -73,9 +75,10 @@ export default function VideoMaker({ loss, demo, layout, children }: { loss: Pub
       fonts,
     };
     const ctx = el.getContext("2d")!;
+    const duration = durationOf(scene);
     drawFrame(ctx, W, H, scene, 0);
 
-    const mp4 = await encodeMp4(el, (t) => drawFrame(ctx, W, H, scene, t), (done) =>
+    const mp4 = await encodeMp4(el, duration, (t) => drawFrame(ctx, W, H, scene, t), (done) =>
       setState({ step: "working", label: `Making the video… ${Math.round(done * 100)}%` }),
     ).catch((e) => String(e?.message || e));
     if (mp4 instanceof Blob) {
@@ -99,10 +102,10 @@ export default function VideoMaker({ loss, demo, layout, children }: { loss: Pub
     await new Promise<void>((resolve) => {
       const tick = () => {
         const t = (performance.now() - t0) / 1000;
-        drawFrame(ctx, W, H, scene, Math.min(t, DURATION));
-        const label = `Recording… ${Math.max(0, Math.ceil(DURATION - t))}s`;
+        drawFrame(ctx, W, H, scene, Math.min(t, duration));
+        const label = `Recording… ${Math.max(0, Math.ceil(duration - t))}s`;
         setState((s) => (s.step === "working" && s.label !== label ? { step: "working", label } : s));
-        if (t >= DURATION + 0.2) resolve();
+        if (t >= duration + 0.2) resolve();
         else requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
@@ -187,7 +190,7 @@ export default function VideoMaker({ loss, demo, layout, children }: { loss: Pub
  * Codifica o vídeo quadro a quadro com WebCodecs, mais rápido que o tempo real e sempre em MP4.
  * Sem WebCodecs ou sem H.264, devolve o motivo em texto e o vídeo é gravado com o MediaRecorder.
  */
-async function encodeMp4(el: HTMLCanvasElement, draw: (t: number) => void, progress: (done: number) => void): Promise<Blob | string> {
+async function encodeMp4(el: HTMLCanvasElement, duration: number, draw: (t: number) => void, progress: (done: number) => void): Promise<Blob | string> {
   if (typeof VideoEncoder === "undefined" || typeof VideoFrame === "undefined") return "this browser has no WebCodecs";
   const { width, height } = el;
   // Primeiro o codificador da placa de vídeo; se ele recusar o tamanho (alguns pedem múltiplos de 16) ou falhar
@@ -201,7 +204,7 @@ async function encodeMp4(el: HTMLCanvasElement, draw: (t: number) => void, progr
   let why = "";
   for (const config of configs) {
     try {
-      return await encodeWith(config, el, draw, progress);
+      return await encodeWith(config, el, duration, draw, progress);
     } catch (e) {
       why = `${config.codec}: ${e instanceof Error ? e.message : String(e)}`;
     }
@@ -217,7 +220,7 @@ async function firstSupported(width: number, height: number, hardwareAcceleratio
   return null;
 }
 
-async function encodeWith(config: VideoEncoderConfig, el: HTMLCanvasElement, draw: (t: number) => void, progress: (done: number) => void) {
+async function encodeWith(config: VideoEncoderConfig, el: HTMLCanvasElement, duration: number, draw: (t: number) => void, progress: (done: number) => void) {
   const { width, height } = el;
   const { Muxer, ArrayBufferTarget } = await import("mp4-muxer");
   // fastStart "in-memory" põe o índice no começo do arquivo: o X recusa MP4 com o índice no fim
@@ -226,10 +229,10 @@ async function encodeWith(config: VideoEncoderConfig, el: HTMLCanvasElement, dra
   const encoder = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => (failure = e) });
   try {
     encoder.configure(config);
-    const frames = Math.ceil(DURATION * FPS) + 6;
+    const frames = Math.ceil(duration * FPS) + 6;
     for (let i = 0; i < frames; i++) {
       if (failure) throw failure;
-      draw(Math.min(i / FPS, DURATION));
+      draw(Math.min(i / FPS, duration));
       const frame = new VideoFrame(el, { timestamp: Math.round((i * 1e6) / FPS), duration: Math.round(1e6 / FPS) });
       encoder.encode(frame, { keyFrame: i % (FPS * 2) === 0 });
       frame.close();

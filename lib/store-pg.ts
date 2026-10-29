@@ -77,5 +77,10 @@ export function pgBackend(query: Query): Backend {
       cached = null;
       return rows.length ? Number(rows[0].n) : null;
     },
+    async remove(id) {
+      await ensure();
+      await query(`DELETE FROM losses WHERE id = $1`, [id]);
+      cached = null;
+    },
   };
 }

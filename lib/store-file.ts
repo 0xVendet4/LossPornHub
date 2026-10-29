@@ -61,5 +61,12 @@ export function fileBackend(): Backend {
       }
       return loss.respects;
     },
+    async remove(id) {
+      const all = await load();
+      const i = all.findIndex((l) => l.id === id);
+      if (i < 0) return;
+      all.splice(i, 1);
+      await persist();
+    },
   };
 }

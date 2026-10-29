@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import LossCard from "@/components/LossCard";
+import DeletePost from "@/components/DeletePost";
 import { IconArrow } from "@/components/Icons";
 import { getLoss } from "@/lib/store";
 import { headline } from "@/lib/headline";
@@ -39,6 +40,7 @@ export default async function PostPage({ params }: Props) {
       </div>
 
       <LossCard loss={loss} />
+      {!loss.example && <DeletePost id={loss.id} family={loss.family} />}
 
       <div className="surface flex flex-col items-center gap-3 p-6 text-center">
         <p className="font-display text-lg font-semibold">What about your wallet?</p>

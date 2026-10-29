@@ -20,6 +20,8 @@ export type Backend = {
   insert(loss: Loss): Promise<boolean>;
   /** Nova contagem de F, ou null se o post não existe. */
   respect(id: string, voter: string): Promise<number | null>;
+  /** Apaga o post e os F dele. */
+  remove(id: string): Promise<void>;
 };
 
 export const DB_URL = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
@@ -57,6 +59,15 @@ export function createStore(backend: Backend) {
       createdAt: Date.now(),
     };
     return (await backend.insert(loss)) ? toPublic(loss) : "duplicate";
+  }
+
+  /** Só a carteira que postou apaga. A conferência da assinatura fica com quem chama. */
+  async function deleteLoss(id: string, wallet: string): Promise<"deleted" | "not_found" | "not_owner"> {
+    const l = (await backend.all()).find((x) => x.id === id);
+    if (!l || l.example) return "not_found";
+    if (walletKey(l.wallet) !== walletKey(wallet)) return "not_owner";
+    await backend.remove(id);
+    return "deleted";
   }
 
   async function payRespects(id: string, voter: string): Promise<number | null> {
@@ -106,7 +117,7 @@ export function createStore(backend: Backend) {
     return { total, count: all.length, wallets: wallets.size, respects, evm, sol, biggest: biggest ? toPublic(biggest) : null };
   }
 
-  return { listLosses, authorLosses, getLoss, addLoss, payRespects, leaderboard, stats };
+  return { listLosses, authorLosses, getLoss, addLoss, deleteLoss, payRespects, leaderboard, stats };
 }
 
 export type Sort = "new" | "top" | "respects";
@@ -114,4 +125,4 @@ export type NewLoss = Omit<Loss, "id" | "respects" | "respectedBy" | "createdAt"
 export type LeaderRow = { author: string; chain: string; family: string; total: number; count: number; biggest: number; biggestKind: LossKind; biggestToken: string; biggestSymbol: string; biggestLogo?: string };
 
 const store = createStore(DB_URL ? pgBackend(neonQuery(DB_URL)) : fileBackend());
-export const { listLosses, authorLosses, getLoss, addLoss, payRespects, leaderboard, stats } = store;
+export const { listLosses, authorLosses, getLoss, addLoss, deleteLoss, payRespects, leaderboard, stats } = store;

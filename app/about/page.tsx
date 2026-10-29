@@ -29,7 +29,7 @@ const FAQ = [
   },
   {
     q: "Can I delete a post?",
-    a: "Not yet. Think before you sign. The caption is optional, the number isn't.",
+    a: "Yes. Open the post and tap \"Is this yours? Delete it\". You sign with the wallet that posted it, and only that wallet can delete it.",
   },
 ];
 
