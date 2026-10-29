@@ -38,7 +38,7 @@ O disco da Vercel não guarda arquivo, então lá os posts vão para um Postgres
 1. Suba o código para um repositório no GitHub
 2. Em https://vercel.com/new importe o repositório (Framework: Next.js, sem mudar nada) e clique em Deploy
 3. No projeto: **Storage → Create Database → Neon** (plano Free). Isso cria a `DATABASE_URL` sozinho
-4. **Settings → Environment Variables:** `HELIUS_API_KEY` e `ETHERSCAN_API_KEY` (e, se tiver, `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`)
+4. **Settings → Environment Variables:** `HELIUS_API_KEY`, `ETHERSCAN_API_KEY` e `ALCHEMY_API_KEY` (e, se tiver, `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`)
 5. **Deployments → Redeploy** para o site subir já com as variáveis
 
 As tabelas são criadas sozinhas no primeiro acesso. Para colocar os posts de exemplo no banco, no PC: `set DATABASE_URL=<valor copiado da Vercel>` e `npm run seed`.
@@ -46,7 +46,8 @@ As tabelas são criadas sozinhas no primeiro acesso. Para colocar os posts de ex
 ## Como funciona
 
 - `lib/scan/helius.ts` lê o histórico de swaps da carteira Solana (já interpretado pela Helius, até 500 mais recentes)
-- `lib/scan/etherscan.ts` lê transferências de token, ETH enviado e ETH recebido nas 6 redes EVM e junta por transação
+- `lib/scan/etherscan.ts` lê transferências de token, ETH enviado e ETH recebido em Ethereum, Arbitrum e Polygon e junta por transação
+- `lib/scan/alchemy.ts` faz o mesmo em Base, BNB, Optimism e Robinhood Chain, que a Etherscan grátis não cobre. Onde a Alchemy não lista o ETH devolvido pelo router, ele sai da diferença de saldo da carteira no bloco da venda
 - `lib/scan/legs.ts` transforma cada transação em "o que saiu" e "o que entrou". O lado em stable ou SOL/ETH/BNB/POL dá o valor em dólar; o outro lado é o token
 - `lib/scan/history.ts` pega o preço do dia de SOL/ETH/BNB/POL na Binance (sem chave; CryptoCompare se a Binance falhar)
 - `lib/scan/prices.ts` pega o preço atual na DexScreener (grátis, sem chave), usando o par de maior liquidez

@@ -288,9 +288,16 @@ function ReportView({
           {report.demo && <Note>Example with made-up data. Scan a real wallet to see your own numbers.</Note>}
           {report.truncated && <Note>Very active wallet: only the most recent swaps per network were read.</Note>}
           {(report.paidChains?.length ?? 0) > 0 && (
-            <Note>Skipped {report.paidChains!.map((c) => CHAINS[c].name).join(", ")}: the free Etherscan plan doesn&apos;t cover {report.paidChains!.length === 1 ? "it" : "them"}.</Note>
+            <Note>
+              Skipped {report.paidChains!.map((c) => CHAINS[c].name).join(", ")}: the free Etherscan plan doesn&apos;t cover{" "}
+              {report.paidChains!.length === 1 ? "it" : "them"}. A free ALCHEMY_API_KEY reads {report.paidChains!.length === 1 ? "it" : "them"}.
+            </Note>
           )}
-          {report.failedChains.length > 0 && <Note>Couldn't read: {report.failedChains.map((c) => CHAINS[c].name).join(", ")}.</Note>}
+          {report.failedChains.length > 0 && (
+            <Note>
+              Couldn&apos;t read: {report.failedChains.map((c) => CHAINS[c].name).join(", ")}. {report.failedReasons?.join(" ")}
+            </Note>
+          )}
           {totals.unpriced > 0 && <Note>{totals.unpriced} token(s) with no price today (probably dead) were left out of the math.</Note>}
           {(report.unpricedSwaps ?? 0) > 0 && (
             <Note>

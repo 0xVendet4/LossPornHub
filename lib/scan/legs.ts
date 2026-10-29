@@ -17,6 +17,7 @@ export const NATIVE: Record<ChainKey, { coin: Coin; address: string; symbol: str
   arbitrum: { coin: "ETH", address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", symbol: "ETH", name: "Ether" },
   polygon: { coin: "POL", address: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270", symbol: "POL", name: "Polygon" },
   bsc: { coin: "BNB", address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", symbol: "BNB", name: "BNB" },
+  robinhood: { coin: "ETH", address: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73", symbol: "ETH", name: "Ether" },
   solana: { coin: "SOL", address: "So11111111111111111111111111111111111111112", symbol: "SOL", name: "Solana" },
 };
 
@@ -28,6 +29,7 @@ const PRICED: Record<ChainKey, Record<string, Coin>> = {
   arbitrum: { [addrKey("arbitrum", NATIVE.arbitrum.address)]: "ETH" },
   polygon: { [addrKey("polygon", NATIVE.polygon.address)]: "POL", "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619": "ETH" },
   bsc: { [addrKey("bsc", NATIVE.bsc.address)]: "BNB", "0x2170ed0880ac9a755fd29b2688956bd959f933f8": "ETH" },
+  robinhood: { [addrKey("robinhood", NATIVE.robinhood.address)]: "ETH" },
   solana: { [NATIVE.solana.address]: "SOL" },
 };
 

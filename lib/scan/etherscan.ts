@@ -17,10 +17,11 @@ const CHAIN_ID: Partial<Record<ChainKey, number>> = {
   optimism: 10,
   polygon: 137,
   bsc: 56,
+  robinhood: 4663,
 };
 
 /**
- * Desde nov/2025 o plano grátis da Etherscan não cobre Base, BNB e Optimism (entre outras).
+ * Desde nov/2025 o plano grátis da Etherscan não cobre Base, BNB, Optimism e Robinhood Chain (entre outras).
  * A primeira resposta "Free API access is not supported" marca a rede aqui, e os próximos raio-x já pulam ela.
  */
 export const PAID_ONLY = new Set<ChainKey>();

@@ -53,7 +53,9 @@ export type Report = {
   totals: { missedUsd: number; realizedLossUsd: number; realizedGainUsd: number; unpriced: number };
   /** Swaps que ficaram de fora por não ter como saber o valor em dólar (token por token, sem SOL/ETH/stable). */
   unpricedSwaps?: number;
-  /** Redes EVM puladas porque o plano grátis da Etherscan não cobre (Base, BNB, Optimism). */
+  /** Redes EVM puladas porque o plano grátis da Etherscan não cobre e não há chave da Alchemy. */
   paidChains?: ChainKey[];
+  /** Por que as redes de `failedChains` falharam, sem repetir. */
+  failedReasons?: string[];
   demo?: boolean;
 };

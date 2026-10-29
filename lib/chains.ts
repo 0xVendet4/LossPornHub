@@ -5,6 +5,7 @@ export type ChainKey =
   | "optimism"
   | "polygon"
   | "bsc"
+  | "robinhood"
   | "solana";
 
 export type ChainInfo = {
@@ -32,6 +33,7 @@ export const CHAINS: Record<ChainKey, ChainInfo> = {
   optimism: evm("optimism", "Optimism", "#ff0420", "https://optimistic.etherscan.io"),
   polygon: evm("polygon", "Polygon", "#8247e5", "https://polygonscan.com"),
   bsc: evm("bsc", "BNB Chain", "#f0b90b", "https://bscscan.com"),
+  robinhood: evm("robinhood", "Robinhood Chain", "#ccff00", "https://robinhoodchain.blockscout.com"),
   solana: {
     key: "solana",
     name: "Solana",

@@ -1,5 +1,6 @@
 import { EVM_CHAINS, detectFamily, walletKey, type ChainKey } from "../chains";
 import { ENV_WHERE, ScanError } from "./errors";
+import { ALCHEMY_SLUG, fetchAlchemySwaps } from "./alchemy";
 import { PAID_ONLY, fetchEvmSwaps } from "./etherscan";
 import { fetchSolanaMetadata, fetchSolanaSwaps } from "./helius";
 import { addrKey, currentPrices, type Quote } from "./prices";
@@ -30,9 +31,12 @@ export async function scanWallet(address: string): Promise<Report> {
 }
 
 async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
-  // Redes que a Etherscan já disse que exigem plano pago ficam de fora sem gastar chamada
-  const paidChains: ChainKey[] = family === "evm" ? EVM_CHAINS.filter((c) => PAID_ONLY.has(c)) : [];
-  const chains: ChainKey[] = family === "evm" ? EVM_CHAINS.filter((c) => !PAID_ONLY.has(c)) : ["solana"];
+  // Redes que a Etherscan grátis não cobre vão pela Alchemy, se tiver chave; sem ela, as que a Etherscan
+  // já recusou ficam de fora sem gastar chamada
+  const alchemyKey = family === "evm" ? process.env.ALCHEMY_API_KEY : undefined;
+  const viaAlchemy = (c: ChainKey) => !!alchemyKey && !!ALCHEMY_SLUG[c];
+  const paidChains: ChainKey[] = family === "evm" ? EVM_CHAINS.filter((c) => PAID_ONLY.has(c) && !viaAlchemy(c)) : [];
+  const chains: ChainKey[] = family === "evm" ? EVM_CHAINS.filter((c) => !paidChains.includes(c)) : ["solana"];
   // A função da Vercel tem 60 s; o raio-x EVM para de paginar em 40 s e usa o que já leu
   const deadline = Date.now() + 40_000;
   const apiKey = family === "evm" ? process.env.ETHERSCAN_API_KEY : process.env.HELIUS_API_KEY;
@@ -46,7 +50,13 @@ async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
     );
 
   const results = await Promise.allSettled(
-    chains.map((c) => (c === "solana" ? fetchSolanaSwaps(wallet, apiKey) : fetchEvmSwaps(c, wallet, apiKey, deadline)))
+    chains.map((c) =>
+      c === "solana"
+        ? fetchSolanaSwaps(wallet, apiKey)
+        : viaAlchemy(c)
+          ? fetchAlchemySwaps(c, wallet, alchemyKey!, deadline)
+          : fetchEvmSwaps(c, wallet, apiKey, deadline),
+    ),
   );
 
   const swaps: Swap[] = [];
@@ -54,6 +64,7 @@ async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
   let truncated = false;
   let unpricedSwaps = 0;
   let firstError: unknown;
+  const failedReasons: string[] = [];
   results.forEach((r, i) => {
     if (r.status === "fulfilled") {
       swaps.push(...r.value.swaps);
@@ -64,6 +75,8 @@ async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
     } else {
       failedChains.push(chains[i]);
       firstError ??= r.reason;
+      const why = r.reason instanceof ScanError ? r.reason.message : "Unexpected error.";
+      if (!failedReasons.includes(why)) failedReasons.push(why);
     }
   });
   const read = chains.filter((c) => !failedChains.includes(c) && !paidChains.includes(c));
@@ -84,6 +97,10 @@ async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
   );
 
   if (family === "solana") await fillSolanaMetadata(swaps, prices, apiKey);
+  else {
+    // A Alchemy às vezes não sabe o símbolo do token: usa o da DexScreener ou o começo do endereço
+    for (const s of swaps) if (!s.token.symbol) s.token.symbol = (prices.get(`${s.chain}:${addrKey(s.chain, s.token.address)}`)?.symbol || s.token.address.slice(0, 6)).slice(0, 20);
+  }
 
   const report: Report = {
     ...buildReport({
@@ -97,6 +114,7 @@ async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
     }),
     unpricedSwaps,
     paidChains,
+    failedReasons,
   };
   cache.set(walletKey(wallet), { report, at: Date.now() });
   return report;

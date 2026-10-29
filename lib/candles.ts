@@ -17,6 +17,7 @@ const NETWORK: Record<ChainKey, string> = {
   optimism: "optimism",
   polygon: "polygon_pos",
   bsc: "bsc",
+  robinhood: "robinhood",
   solana: "solana",
 };
 
