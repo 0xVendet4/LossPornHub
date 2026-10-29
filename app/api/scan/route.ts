@@ -15,16 +15,19 @@ export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   const wallet = req.nextUrl.searchParams.get("wallet")?.trim() ?? "";
+  // ?trace=1: sempre 200, com o status e o tempo, para conferir o site de fora (ferramentas que só leem respostas 2xx).
+  // &budget=8 encurta o prazo do raio-x para 8 s, para a resposta chegar antes do limite dessas ferramentas.
+  const trace = req.nextUrl.searchParams.get("trace") === "1";
+  const budget = trace ? Number(req.nextUrl.searchParams.get("budget")) * 1000 || undefined : undefined;
   const t0 = Date.now();
-  const res = await answer(wallet);
-  // ?trace=1: sempre 200, com o status e o tempo, para conferir o site de fora (ferramentas que só leem respostas 2xx)
-  if (req.nextUrl.searchParams.get("trace") !== "1") return res;
+  const res = await answer(wallet, budget);
+  if (!trace) return res;
   return NextResponse.json({ status: res.status, ms: Date.now() - t0, body: await res.json() });
 }
 
-async function answer(wallet: string) {
+async function answer(wallet: string, budget?: number) {
   try {
-    return NextResponse.json(await scanWallet(wallet));
+    return NextResponse.json(await scanWallet(wallet, budget));
   } catch (e) {
     if (e instanceof ScanError) return NextResponse.json({ error: e.message, code: e.code, hosted: onVercel }, { status: e.status });
     console.error(e);

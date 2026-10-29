@@ -14,11 +14,14 @@ const TTL_MS = 15 * 60 * 1000;
 const cache = new Map<string, { report: Report; at: number }>();
 const inflight = new Map<string, Promise<Report>>();
 
-export async function scanWallet(address: string): Promise<Report> {
+/** `budgetMs` encurta o prazo do raio-x (só para baixo), para testar o site de fora; esse resultado não vai para o cache. */
+export async function scanWallet(address: string, budgetMs?: number): Promise<Report> {
   if (address === "demo") return demoReport();
 
   const family = detectFamily(address);
   if (!family) throw new ScanError("Invalid address. Paste an EVM (0x…) or Solana address.", 400, "bad_address");
+
+  if (budgetMs) return run(address, family, Math.min(budgetMs, 25_000));
 
   const key = walletKey(address);
   const hit = cache.get(key);
@@ -30,7 +33,7 @@ export async function scanWallet(address: string): Promise<Report> {
   return job;
 }
 
-async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
+async function run(wallet: string, family: "evm" | "solana", budgetMs = 25_000): Promise<Report> {
   // Redes que a Etherscan grátis não cobre vão pela Alchemy, se tiver chave; sem ela, as que a Etherscan
   // já recusou ficam de fora sem gastar chamada
   const alchemyKey = family === "evm" ? process.env.ALCHEMY_API_KEY : undefined;
@@ -39,7 +42,7 @@ async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
   const chains: ChainKey[] = family === "evm" ? EVM_CHAINS.filter((c) => !paidChains.includes(c)) : ["solana"];
   // A função da Vercel tem 60 s e, se passar, devolve erro sem explicação. O raio-x EVM para de paginar em 25 s
   // e usa o que já leu; a rede que ainda não terminou em 37 s fica de fora. Depois ainda vem o preço de hoje.
-  const deadline = Date.now() + 25_000;
+  const deadline = Date.now() + budgetMs;
   const cutoff = <T,>(job: Promise<T>, c: ChainKey) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const stop = new Promise<never>((_, reject) => {
@@ -132,7 +135,7 @@ async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
     failedReasons,
     timing: { ...timing, total: Date.now() - t0 },
   };
-  cache.set(walletKey(wallet), { report, at: Date.now() });
+  if (budgetMs === 25_000) cache.set(walletKey(wallet), { report, at: Date.now() });
   return report;
 }
 
