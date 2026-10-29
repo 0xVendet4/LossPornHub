@@ -8,7 +8,7 @@ import TokenAvatar from "@/components/TokenAvatar";
 import { IconArrow } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Hall of Shame · LossPornHub" };
+export const metadata = { title: "Hall of Shame" };
 
 // "$WIF" fica como está; "whole wallet" ganha só a inicial maiúscula
 const tokenLabel = (t: string) => (t.startsWith("$") ? t : t.charAt(0).toUpperCase() + t.slice(1));

@@ -1,7 +1,7 @@
 import LinkWallets from "@/components/LinkWallets";
 
 export const metadata = {
-  title: "Link wallets · LossPornHub",
+  title: "Link wallets",
   description: "Put posts from all your wallets under one anonymous name. Addresses stay private.",
 };
 
