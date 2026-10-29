@@ -5,6 +5,7 @@ import Providers from "@/components/Providers";
 import Link from "next/link";
 import Header, { LogoMark } from "@/components/Header";
 import Ticker from "@/components/Ticker";
+import BackToTop from "@/components/BackToTop";
 
 const sora = Sora({ subsets: ["latin"], weight: ["500", "600", "700"], variable: "--font-sora" });
 const figtree = Figtree({ subsets: ["latin"], variable: "--font-figtree" });
@@ -91,6 +92,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               ))}
             </div>
           </footer>
+          <BackToTop />
         </Providers>
       </body>
     </html>

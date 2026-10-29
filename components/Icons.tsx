@@ -42,6 +42,12 @@ export const IconArrow = ({ className = "size-4" }: P) => (
   </svg>
 );
 
+export const IconArrowUp = ({ className = "size-4" }: P) => (
+  <svg viewBox="0 0 24 24" className={className} {...base}>
+    <path d="M12 19V5M6 11l6-6 6 6" />
+  </svg>
+);
+
 export const IconExternal = ({ className = "size-3.5" }: P) => (
   <svg viewBox="0 0 24 24" className={className} {...base}>
     <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
