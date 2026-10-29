@@ -5,3 +5,4 @@ data/*.json
 .env
 .env.txt
 next-env.d.ts
+*.tsbuildinfo

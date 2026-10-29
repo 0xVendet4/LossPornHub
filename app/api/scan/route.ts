@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { scanWallet, ScanError } from "@/lib/scan";
+import { onVercel } from "@/lib/scan/errors";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest) {
   try {
     return NextResponse.json(await scanWallet(wallet));
   } catch (e) {
-    if (e instanceof ScanError) return NextResponse.json({ error: e.message, code: e.code }, { status: e.status });
+    if (e instanceof ScanError) return NextResponse.json({ error: e.message, code: e.code, hosted: onVercel }, { status: e.status });
     console.error(e);
     return NextResponse.json({ error: `Couldn't read this wallet right now (${describe(e)}). Try again.`, code: "scan_failed" }, { status: 502 });
   }

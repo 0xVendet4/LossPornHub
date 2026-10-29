@@ -1,5 +1,5 @@
 import type { ChainKey } from "../chains";
-import { ScanError, sleep } from "./errors";
+import { ENV_WHERE, ScanError, sleep } from "./errors";
 import { NATIVE, swapFromLegs, type Leg } from "./legs";
 import type { Swap } from "./types";
 
@@ -57,7 +57,7 @@ async function call(chain: ChainKey, params: Record<string, string | number>, ap
       await sleep(1200);
       continue;
     }
-    if (/api key/i.test(text)) throw new ScanError("Etherscan rejected the API key. Check ETHERSCAN_API_KEY in .env.local.", 500, "bad_key");
+    if (/api key/i.test(text)) throw new ScanError(`Etherscan rejected the API key. Check ETHERSCAN_API_KEY in ${ENV_WHERE}.`, 500, "bad_key");
     if (/no transactions found|no records found/i.test(`${data.message} ${text}`)) return [];
     throw new ScanError(`Etherscan responded "${text || data.message}" for ${chain}.`);
   }

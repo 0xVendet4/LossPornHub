@@ -17,7 +17,7 @@ import TokenAvatar from "./TokenAvatar";
 import { Badge, EvmButton, SolButton } from "./WalletButtons";
 import { IconAlert, IconArrow, IconCheck, IconDownload, IconInfo, IconSearch, IconTrendUp } from "./Icons";
 
-type ScanError = { error: string; code?: string };
+type ScanError = { error: string; code?: string; hosted?: boolean };
 
 export default function Scanner() {
   const evm = useAccount();
@@ -215,13 +215,26 @@ function ErrorPanel({ error, onDemo }: { error: ScanError; onDemo: () => void })
               </a>{" "}
               (Free plan).
             </>,
-            <>
-              In the project folder, create a <code className={code}>.env.local</code> file with <code className={code}>HELIUS_API_KEY=your_key</code> and{" "}
-              <code className={code}>ETHERSCAN_API_KEY=your_key</code>. One is enough if you only read one of the networks.
-            </>,
-            <>
-              Stop the server (Ctrl+C) and run <code className={code}>npm run dev</code> again.
-            </>,
+            ...(error.hosted
+              ? [
+                  <>
+                    In Vercel, open the project's <span className="text-fg">Settings → Environment Variables</span> and add{" "}
+                    <code className={code}>HELIUS_API_KEY</code> and <code className={code}>ETHERSCAN_API_KEY</code> for Production.
+                  </>,
+                  <>
+                    Go to <span className="text-fg">Deployments</span> and click <span className="text-fg">Redeploy</span> on the latest one. Keys only
+                    load on a new deploy.
+                  </>,
+                ]
+              : [
+                  <>
+                    In the project folder, create a <code className={code}>.env.local</code> file with <code className={code}>HELIUS_API_KEY=your_key</code> and{" "}
+                    <code className={code}>ETHERSCAN_API_KEY=your_key</code>. One is enough if you only read one of the networks.
+                  </>,
+                  <>
+                    Stop the server (Ctrl+C) and run <code className={code}>npm run dev</code> again.
+                  </>,
+                ]),
           ].map((step, i) => (
             <li key={i} className="flex items-start gap-3">
               <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-raise text-xs font-semibold text-dim">{i + 1}</span>

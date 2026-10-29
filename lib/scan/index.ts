@@ -1,5 +1,5 @@
 import { EVM_CHAINS, detectFamily, walletKey, type ChainKey } from "../chains";
-import { ScanError } from "./errors";
+import { ENV_WHERE, ScanError } from "./errors";
 import { fetchEvmSwaps } from "./etherscan";
 import { fetchSolanaMetadata, fetchSolanaSwaps } from "./helius";
 import { addrKey, currentPrices, type Quote } from "./prices";
@@ -35,8 +35,8 @@ async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
   if (!apiKey)
     throw new ScanError(
       family === "evm"
-        ? "ETHERSCAN_API_KEY is missing in .env.local, so EVM wallets can't be read."
-        : "HELIUS_API_KEY is missing in .env.local, so Solana wallets can't be read.",
+        ? `ETHERSCAN_API_KEY is missing in ${ENV_WHERE}, so EVM wallets can't be read.`
+        : `HELIUS_API_KEY is missing in ${ENV_WHERE}, so Solana wallets can't be read.`,
       503,
       "no_key"
     );

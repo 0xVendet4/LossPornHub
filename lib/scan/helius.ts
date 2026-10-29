@@ -1,4 +1,4 @@
-import { ScanError } from "./errors";
+import { ENV_WHERE, ScanError } from "./errors";
 import { NATIVE, swapFromLegs, type Leg } from "./legs";
 import type { Swap } from "./types";
 
@@ -69,7 +69,7 @@ export async function fetchSolanaSwaps(wallet: string, apiKey: string, maxPages 
 
     const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(25_000) });
     if (res.status === 401 || res.status === 403)
-      throw new ScanError("Helius rejected the API key. Check HELIUS_API_KEY in .env.local.", 500, "bad_key");
+      throw new ScanError(`Helius rejected the API key. Check HELIUS_API_KEY in ${ENV_WHERE}.`, 500, "bad_key");
     if (res.status === 429) throw new ScanError("Helius rate limit reached. Try again in a few minutes.", 429, "rate_limited");
     // Versões da API chamam o cursor de nomes diferentes
     if (res.status === 400 && before && cursorParam === "before") {
