@@ -8,6 +8,8 @@ export type CandlePlot = {
   y: (price: number) => number;
   sell: { x: number; y: number };
   last: { x: number; y: number; price: number };
+  /** Máxima depois da venda (pavio mais alto), se houver candle depois dela. */
+  peak: { x: number; y: number; price: number; at: number } | null;
 };
 
 type Box = { x: number; y: number; w: number; h: number };
@@ -37,8 +39,27 @@ export function plotCandles(cs: Candle[], sellAt: number, sellPrice: number, box
   const idx = (sellAt - cs[0].t) / step;
   const sx = Math.min(box.x + box.w, Math.max(box.x, cx(idx)));
 
-  return { bars, y, sell: { x: sx, y: y(sellPrice) }, last: { x: cx(n - 1), y: y(cs[n - 1].c), price: cs[n - 1].c } };
+  const high = peakAfter(cs, sellAt);
+  return {
+    bars,
+    y,
+    sell: { x: sx, y: y(sellPrice) },
+    last: { x: cx(n - 1), y: y(cs[n - 1].c), price: cs[n - 1].c },
+    peak: high && { x: cx(high.i), y: y(high.price), price: high.price, at: high.at },
+  };
 }
+
+/** O candle de máxima mais alta depois da venda: até onde o token foi depois que a pessoa vendeu. */
+export function peakAfter(cs: Candle[], sellAt: number) {
+  let best: { i: number; price: number; at: number } | null = null;
+  cs.forEach((c, i) => {
+    if (c.t >= sellAt && (!best || c.h > best.price)) best = { i, price: c.h, at: c.t };
+  });
+  return best as { i: number; price: number; at: number } | null;
+}
+
+/** O pico só vale ser mostrado quando ficou bem acima do preço de hoje; senão repete o "hoje". */
+export const peakWorthShowing = (peak: number | undefined, nowPrice: number) => !!peak && peak > nowPrice * 1.15;
 
 /**
  * Os candles batem com o preço de hoje? Se o último fechamento estiver longe do preço da DexScreener,

@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChainKey } from "@/lib/chains";
 import type { Candle } from "@/lib/candles";
-import { candlesMatch, plotCandles } from "@/lib/candle-plot";
-import { price } from "@/lib/format";
+import { candlesMatch, peakWorthShowing, plotCandles } from "@/lib/candle-plot";
+import { date, money, multiple, price } from "@/lib/format";
+import { fuzz } from "@/lib/privacy";
 import MoveChart, { MoveCaption } from "./MoveChart";
 
 /** De onde vêm os candles: o token, o par e a hora da venda. `demo` usa candles inventados (carteira de exemplo). */
@@ -64,6 +65,7 @@ export default function CandleChart({
   toLabel,
   id,
   mult,
+  soldUsd,
 }: {
   source: CandleSource;
   from: number;
@@ -72,6 +74,8 @@ export default function CandleChart({
   toLabel: string;
   id: string;
   mult?: number | null;
+  /** Com o valor vendido, o gráfico mostra quanto isso chegou a valer no pico depois da venda. */
+  soldUsd?: number;
 }) {
   // Só busca quando o gráfico chega perto da tela: o feed tem muitos cards e a API dos candles tem limite por minuto
   const ref = useRef<HTMLElement>(null);
@@ -89,6 +93,7 @@ export default function CandleChart({
 
   const ring = "var(--chart-surface, var(--color-card))";
   const plot = candles ? plotCandles(candles, source.since, from, { x: 3, y: 6, w: 314, h: 84 }) : null;
+  const peak = plot?.peak && peakWorthShowing(plot.peak.price, to) ? plot.peak : null;
 
   return (
     <figure ref={ref} className="flex flex-col gap-3">
@@ -110,6 +115,7 @@ export default function CandleChart({
             <g className="fade" style={{ animationDelay: `${plot.bars.length * 12}ms` }}>
               <circle cx={plot.sell.x} cy={plot.sell.y} r="4" fill="var(--color-dim)" stroke={ring} strokeWidth="2" />
               <circle cx={plot.last.x} cy={plot.last.y} r="4.5" fill="var(--color-loss)" stroke={ring} strokeWidth="2" />
+              {peak && <circle cx={peak.x} cy={peak.y} r="3.5" fill="var(--color-lilac)" stroke={ring} strokeWidth="2" />}
             </g>
           </>
         ) : (
@@ -117,6 +123,18 @@ export default function CandleChart({
         )}
       </svg>
       <MoveCaption from={from} to={to} fromLabel={fromLabel} toLabel={toLabel} mult={mult} />
+      {peak && soldUsd !== undefined && (
+        <p className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[13px]">
+          <span className="flex items-center gap-1.5 text-dim">
+            <span className="size-2 rounded-full bg-lilac" aria-hidden />
+            Worth at the peak, {date(peak.at)}
+          </span>
+          <span className="flex items-center gap-1.5 font-medium tabular-nums">
+            {money(fuzz((soldUsd * peak.price) / from)!)}
+            <span className="rounded-full bg-lilac/15 px-1.5 py-px text-[11px] font-semibold text-lilac">{multiple(peak.price / from)}</span>
+          </span>
+        </p>
+      )}
     </figure>
   );
 }

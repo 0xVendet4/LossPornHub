@@ -162,7 +162,7 @@ export default function LossCard({ loss, preview = false, delay = 0 }: { loss: P
         {move && (
           <div className="flex flex-col gap-3 rounded-2xl bg-raise/70 p-4 [--chart-surface:#1f1d27]">
             {loss.kind === "missed" && loss.tokenAddress && loss.lastSellAt ? (
-              <CandleChart {...move} id={loss.id} source={{ chain: loss.chain, token: loss.tokenAddress, pool: loss.pool, since: loss.lastSellAt, demo }} />
+              <CandleChart {...move} id={loss.id} soldUsd={loss.soldUsd} source={{ chain: loss.chain, token: loss.tokenAddress, pool: loss.pool, since: loss.lastSellAt, demo }} />
             ) : (
               <MoveChart {...move} id={loss.id} />
             )}

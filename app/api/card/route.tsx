@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { ImageResponse } from "next/og";
 import { CHAINS } from "@/lib/chains";
 import { demoCandles, fetchCandles, type Candle } from "@/lib/candles";
-import { candlesMatch, plotCandles } from "@/lib/candle-plot";
+import { candlesMatch, peakAfter, peakWorthShowing, plotCandles } from "@/lib/candle-plot";
 import { amount, date, money, multiple, painUsd, price, usd } from "@/lib/format";
 import { scanWallet, ScanError } from "@/lib/scan";
 import { draftFromReport } from "@/lib/scan/draft";
-import { toPublic } from "@/lib/privacy";
+import { fuzz, toPublic } from "@/lib/privacy";
 import { getLoss } from "@/lib/store";
 import { tierOf } from "@/lib/tier";
 import type { PublicLoss } from "@/lib/types";
@@ -88,6 +88,7 @@ function Chart({ candles, move, sellAt, w, h }: { candles: Candle[]; move: Move;
         })}
         <circle cx={plot.sell.x} cy={plot.sell.y} r="10" fill={C.dim} stroke={C.raise} strokeWidth="4" />
         <circle cx={plot.last.x} cy={plot.last.y} r="11" fill={C.loss} stroke={C.raise} strokeWidth="4" />
+        {plot.peak && peakWorthShowing(plot.peak.price, move.to) && <circle cx={plot.peak.x} cy={plot.peak.y} r="9" fill={C.lilac} stroke={C.raise} strokeWidth="4" />}
       </svg>
     );
   }
@@ -142,6 +143,15 @@ export async function GET(req: NextRequest) {
         ? `Paid ${money(loss.boughtUsd!)} and got back ${money(loss.soldUsd!)}.`
         : "";
   const candles = await candlesFor(loss, move);
+  // Até onde o token foi depois da venda, quando dá para saber pelos candles e ficou bem acima de hoje
+  const peak =
+    loss.kind === "missed" && move && loss.lastSellAt && loss.soldUsd !== undefined && candlesMatch(candles, move.to)
+      ? peakAfter(candles, loss.lastSellAt)
+      : null;
+  const peakLine =
+    peak && peakWorthShowing(peak.price, move!.to)
+      ? `At the peak (${date(peak.at)}) it was worth ${money(fuzz((loss.soldUsd! * peak.price) / move!.from)!)}, ${multiple(peak.price / move!.from)}.`
+      : "";
 
   const header = (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -201,7 +211,17 @@ export async function GET(req: NextRequest) {
           </div>
         </div>
       </div>
-      {story && <div style={{ display: "flex", paddingTop: 18, borderTop: `1px solid ${C.line}`, fontSize: 24, color: C.dim }}>{story}</div>}
+      {story && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 18, borderTop: `1px solid ${C.line}`, fontSize: 24, color: C.dim }}>
+          <span>{story}</span>
+          {peakLine && (
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 12, height: 12, borderRadius: 999, background: C.lilac }} />
+              <span>{peakLine}</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 

@@ -415,6 +415,7 @@ function ReportView({
                   fromLabel="You sold here"
                   toLabel="Today"
                   id="worst"
+                  soldUsd={worst.soldUsd}
                   source={{ chain: worst.chain, token: worst.address, pool: worst.pool, since: worst.lastSellAt, demo: report.demo }}
                 />
               </div>
