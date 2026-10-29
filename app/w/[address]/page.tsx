@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
 import LossCard from "@/components/LossCard";
 import { CHAINS } from "@/lib/chains";
 import { money, moneyCompact, painUsd, usd } from "@/lib/format";
 import { AUTHOR_ID, authorName } from "@/lib/privacy";
-import { authorLosses } from "@/lib/store";
+import { authorLosses, profileInfo } from "@/lib/store";
+import { IconLink } from "@/components/Icons";
 import { tierOf } from "@/lib/tier";
 
 export const dynamic = "force-dynamic";
@@ -31,10 +33,14 @@ export default async function AuthorPage({ params }: Props) {
   const { address: author } = await params;
   if (!AUTHOR_ID.test(author)) notFound();
 
-  const losses = await authorLosses(author);
+  const [losses, profile] = await Promise.all([authorLosses(author), profileInfo(author)]);
   const first = losses[0];
-  if (!first) notFound();
-  const chain = CHAINS[first.chain];
+  if (!first) {
+    // Apelido antigo de uma carteira que foi juntada a um perfil
+    if (profile.movedTo) redirect(`/w/${profile.movedTo}`);
+    notFound();
+  }
+  const families = [...new Set(losses.map((l) => l.family))];
   const worst = losses.reduce<(typeof losses)[number] | null>((m, l) => (!m || l.amountUsd > m.amountUsd ? l : m), null);
   const biggest = worst?.amountUsd ?? 0;
   const missed = losses.filter((l) => l.kind === "missed").reduce((n, l) => n + l.amountUsd, 0);
@@ -52,13 +58,15 @@ export default async function AuthorPage({ params }: Props) {
               <span className="font-mono tracking-tight">{authorName(author)}</span>
             </h1>
             <div className="flex flex-wrap items-center gap-2 text-sm text-dim">
-              <span className="pill py-0.5 text-[11px]">
-                <span className="size-1.5 rounded-full" style={{ background: chain.color }} />
-                {first.family === "solana" ? "Solana" : "EVM"}
-              </span>
+              {families.map((f) => (
+                <span key={f} className="pill py-0.5 text-[11px]">
+                  <span className="size-1.5 rounded-full" style={{ background: f === "solana" ? CHAINS.solana.color : CHAINS.ethereum.color }} />
+                  {f === "solana" ? "Solana" : "EVM"}
+                </span>
+              ))}
               <span>{tier.name}</span>
               <span aria-hidden>·</span>
-              <span>Wallet kept private</span>
+              <span>{profile.wallets > 1 ? `${profile.wallets} wallets, all kept private` : "Wallet kept private"}</span>
             </div>
           </div>
         </div>
@@ -89,6 +97,11 @@ export default async function AuthorPage({ params }: Props) {
           <LossCard key={l.id} loss={l} delay={Math.min(i, 8) * 70} />
         ))}
       </div>
+
+      <Link href="/link" className="inline-flex items-center gap-1.5 self-center text-sm text-dim transition-colors hover:text-fg">
+        <IconLink className="size-3.5" />
+        Is this you? Link your other wallets to this name
+      </Link>
     </div>
   );
 }

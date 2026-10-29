@@ -35,6 +35,7 @@ const FOOTER = [
       ["Feed", "/"],
       ["Wallet scan", "/scan"],
       ["Hall of Shame", "/leaderboard"],
+      ["Link your wallets", "/link"],
       ["How the math works", "/about"],
     ],
   },

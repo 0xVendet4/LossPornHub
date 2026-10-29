@@ -29,7 +29,11 @@ const FAQ = [
   },
   {
     q: "Can I delete a post?",
-    a: "Yes. Open the post and tap \"Is this yours? Delete it\". You sign with the wallet that posted it, and only that wallet can delete it.",
+    a: "Yes. Open the post and tap \"Is this yours? Delete it\". You sign with the wallet that posted it (or one linked to it), and nobody else can delete it.",
+  },
+  {
+    q: "I have more than one wallet.",
+    a: "Link them on the Link wallets page: sign with each one and their posts show under one anonymous name, with the totals added up in the Hall of Shame. The addresses stay private, and you can take a wallet out later by signing with it.",
   },
 ];
 

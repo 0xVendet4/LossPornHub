@@ -6,6 +6,7 @@ import type { Backend } from "./store";
 
 /** Backend em arquivo JSON, para rodar no PC sem banco. Na Vercel o disco não persiste: lá entra o Postgres. */
 const FILE = path.join(process.cwd(), "data", "losses.json");
+const LINKS = path.join(process.cwd(), "data", "links.json");
 
 /** Posts antigos (valor digitado à mão) viram "realized" sem detalhes. */
 function upgrade(l: any): Loss {
@@ -41,8 +42,40 @@ export function fileBackend(): Backend {
     return writing;
   }
 
+  let links: Map<string, string> | null = null;
+  async function loadLinks() {
+    if (links) return links;
+    try {
+      links = new Map(Object.entries(JSON.parse(await fs.readFile(LINKS, "utf8")) as Record<string, string>));
+    } catch {
+      links = new Map();
+    }
+    return links;
+  }
+  function persistLinks() {
+    const snapshot = JSON.stringify(Object.fromEntries(links!), null, 2);
+    writing = writing.then(async () => {
+      await fs.mkdir(path.dirname(LINKS), { recursive: true });
+      await fs.writeFile(LINKS + ".tmp", snapshot);
+      await fs.rename(LINKS + ".tmp", LINKS);
+    });
+    return writing;
+  }
+
   return {
     all: load,
+    links: loadLinks,
+    async setLinks(keys, profile) {
+      const map = await loadLinks();
+      for (const k of keys) map.set(k, profile);
+      await persistLinks();
+    },
+    async unlink(key) {
+      const map = await loadLinks();
+      if (!map.delete(key)) return false;
+      await persistLinks();
+      return true;
+    },
     async insert(loss) {
       const all = await load();
       const w = walletKey(loss.wallet);
