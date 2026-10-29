@@ -16,6 +16,10 @@ const FAQ = [
     a: "The signature proves the wallet is yours, so nobody can post someone else's fumble. It's a signed text message: not a transaction, costs no gas and gives access to nothing.",
   },
   {
+    q: "Will people see my wallet?",
+    a: "No. Posts show an anonymous name like anon-3f9a1c2e instead of the address, never link to the transaction, show only the day of the sell and round every number to three digits, so a post can't be traced back to your wallet in an explorer.",
+  },
+  {
     q: "Are the numbers exact?",
     a: "What was sold and what was received come from the blockchain. The dollar value of a sell made in SOL or ETH uses that day's close, not the price at the minute. Today's price comes from the most liquid pair on DexScreener.",
   },

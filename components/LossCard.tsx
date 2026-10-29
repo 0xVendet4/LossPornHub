@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CHAINS } from "@/lib/chains";
-import { ago, amount, date, money, multiple, painUsd, short, usd } from "@/lib/format";
+import { ago, amount, date, money, multiple, painUsd, usd } from "@/lib/format";
+import { authorName } from "@/lib/privacy";
 import { tierOf } from "@/lib/tier";
 import type { PublicLoss } from "@/lib/types";
 import CandleChart from "./CandleChart";
 import MoveChart from "./MoveChart";
 import TokenAvatar from "./TokenAvatar";
-import { IconCheck, IconDownload, IconExternal, IconFlame, IconTrendDown, IconTrendUp, IconWallet, IconWide, IconX } from "./Icons";
+import { IconCheck, IconDownload, IconFlame, IconTrendDown, IconTrendUp, IconWallet, IconWide, IconX } from "./Icons";
 
 const KIND = {
   missed: { label: "Left on the table", icon: IconTrendUp },
@@ -91,7 +92,7 @@ export default function LossCard({ loss, preview = false, delay = 0 }: { loss: P
   const summary = loss.kind === "wallet" || loss.kind === "total";
   const title = summary ? `${loss.tokensCount ?? "Several"} tokens` : `$${loss.token.toUpperCase()}`;
   const network = summary ? (loss.family === "solana" ? "Solana" : "EVM") : chain.name;
-  const demo = !!loss.example || loss.wallet === "example";
+  const demo = !!loss.example || loss.author === "example";
 
   return (
     <article
@@ -107,11 +108,11 @@ export default function LossCard({ loss, preview = false, delay = 0 }: { loss: P
               <span className="size-2 shrink-0 rounded-full" style={{ background: chain.color }} />
               {network}
               <span aria-hidden>·</span>
-              {preview ? (
-                short(loss.wallet)
+              {preview || demo ? (
+                authorName(loss.author)
               ) : (
-                <Link href={`/w/${loss.wallet}`} className="font-mono text-xs hover:text-fg" title="See every post from this wallet">
-                  {short(loss.wallet)}
+                <Link href={`/w/${loss.author}`} className="font-mono text-xs hover:text-fg" title="See every post from this person">
+                  {authorName(loss.author)}
                 </Link>
               )}
             </span>
@@ -216,11 +217,6 @@ export default function LossCard({ loss, preview = false, delay = 0 }: { loss: P
         ) : null}
         {loss.lastSellAt && <span className="text-dim">Sold on {date(loss.lastSellAt)}</span>}
         <span className="ml-auto flex items-center gap-1">
-          {loss.txHash && !preview && !loss.example && (
-            <a href={chain.txUrl(loss.txHash)} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center gap-1 rounded-full px-2 font-medium text-dim hover:bg-raise hover:text-fg">
-              Tx <IconExternal className="size-3" />
-            </a>
-          )}
           {!preview && (
             <a
               href={`/api/card?id=${loss.id}`}

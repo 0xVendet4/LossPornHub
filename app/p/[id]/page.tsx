@@ -4,8 +4,8 @@ import { notFound } from "next/navigation";
 import LossCard from "@/components/LossCard";
 import { IconArrow } from "@/components/Icons";
 import { getLoss } from "@/lib/store";
-import { short } from "@/lib/format";
 import { headline } from "@/lib/headline";
+import { authorName } from "@/lib/privacy";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +34,7 @@ export default async function PostPage({ params }: Props) {
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-8">
       <div className="flex flex-col gap-2 text-center">
-        <span className="text-sm text-dim">Wallet scan for {short(loss.wallet)}</span>
+        <span className="text-sm text-dim">Wallet scan, posted by {authorName(loss.author)}</span>
         <h1 className="font-display text-2xl font-semibold">{headline(loss)}</h1>
       </div>
 

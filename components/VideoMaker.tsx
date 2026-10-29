@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CHAINS } from "@/lib/chains";
-import { short } from "@/lib/format";
 import { candlesMatch } from "@/lib/candle-plot";
 import { DURATION, drawFrame, type Scene } from "@/lib/timelapse";
 import type { PublicLoss } from "@/lib/types";
@@ -12,14 +11,17 @@ import { IconDownload } from "./Icons";
 export type Layout = "tall" | "wide";
 export const SIZE: Record<Layout, [number, number]> = { tall: [1080, 1350], wide: [1920, 1080] };
 
-// MP4 primeiro: o X e o Instagram não aceitam WebM. Chrome e Safari recentes gravam MP4; o Firefox só WebM.
+const FPS = 30;
+// H.264 nível 4.0 (cabe 1920×1080): High, Main e Baseline, nessa ordem
+const CODECS = ["avc1.640028", "avc1.4d0028", "avc1.42e028"];
+// Plano B quando o navegador não tem WebCodecs: gravar o canvas em tempo real (o Firefox antigo só grava WebM)
 const TYPES = ["video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm"];
 
-type State = { step: "idle" } | { step: "recording"; left: number } | { step: "done"; url: string; ext: string } | { step: "error"; message: string };
+type State = { step: "idle" } | { step: "working"; label: string } | { step: "done"; url: string; ext: string } | { step: "error"; message: string };
 
 /**
- * Vídeo timelapse do gráfico: da venda até hoje, com o valor deixado na mesa subindo.
- * É gravado no próprio navegador, em tempo real, a partir de um canvas.
+ * Vídeo timelapse do gráfico: da venda até hoje, com o valor deixado na mesa subindo. Feito no próprio navegador:
+ * cada quadro é desenhado no canvas e codificado em H.264 num MP4 (o X e o Instagram não aceitam WebM).
  */
 export default function VideoMaker({ loss, demo, layout, children }: { loss: PublicLoss; demo: boolean; layout: Layout; children?: React.ReactNode }) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -39,11 +41,8 @@ export default function VideoMaker({ loss, demo, layout, children }: { loss: Pub
 
   async function make() {
     const el = canvas.current;
-    if (!el || typeof MediaRecorder === "undefined" || !el.captureStream) {
-      setState({ step: "error", message: "This browser can't record video. Try Chrome or Safari on a computer." });
-      return;
-    }
-    setState({ step: "recording", left: Math.ceil(DURATION) });
+    if (!el) return;
+    setState({ step: "working", label: "Loading the chart…" });
     const src = { chain: loss.chain, token: loss.tokenAddress!, pool: loss.pool, since: loss.lastSellAt!, demo };
     const candles = await loadCandles(candlesUrl(src, sellPrice, nowPrice));
     if (!candlesMatch(candles, nowPrice)) {
@@ -62,7 +61,6 @@ export default function VideoMaker({ loss, demo, layout, children }: { loss: Pub
       symbol: loss.token,
       chainName: CHAINS[loss.chain].name,
       chainColor: CHAINS[loss.chain].color,
-      wallet: short(loss.wallet),
       amountUsd: loss.amountUsd,
       soldAmount: qty,
       soldUsd: loss.soldUsd!,
@@ -72,7 +70,19 @@ export default function VideoMaker({ loss, demo, layout, children }: { loss: Pub
     const ctx = el.getContext("2d")!;
     drawFrame(ctx, W, H, scene, 0);
 
-    const stream = el.captureStream(30);
+    const mp4 = await encodeMp4(el, (t) => drawFrame(ctx, W, H, scene, t), (done) =>
+      setState({ step: "working", label: `Making the video… ${Math.round(done * 100)}%` }),
+    ).catch(() => null);
+    if (mp4) {
+      setState({ step: "done", url: URL.createObjectURL(mp4), ext: "mp4" });
+      return;
+    }
+
+    if (typeof MediaRecorder === "undefined" || !el.captureStream) {
+      setState({ step: "error", message: "This browser can't make video. Try Chrome, Edge or Safari." });
+      return;
+    }
+    const stream = el.captureStream(FPS);
     const type = TYPES.find((t) => MediaRecorder.isTypeSupported(t));
     const rec = new MediaRecorder(stream, { ...(type ? { mimeType: type } : {}), videoBitsPerSecond: 8_000_000 });
     const chunks: Blob[] = [];
@@ -85,7 +95,8 @@ export default function VideoMaker({ loss, demo, layout, children }: { loss: Pub
       const tick = () => {
         const t = (performance.now() - t0) / 1000;
         drawFrame(ctx, W, H, scene, Math.min(t, DURATION));
-        setState((s) => (s.step === "recording" && s.left !== Math.ceil(DURATION - t) ? { step: "recording", left: Math.max(0, Math.ceil(DURATION - t)) } : s));
+        const label = `Recording… ${Math.max(0, Math.ceil(DURATION - t))}s`;
+        setState((s) => (s.step === "working" && s.label !== label ? { step: "working", label } : s));
         if (t >= DURATION + 0.2) resolve();
         else requestAnimationFrame(tick);
       };
@@ -100,7 +111,7 @@ export default function VideoMaker({ loss, demo, layout, children }: { loss: Pub
     setState({ step: "done", url: URL.createObjectURL(blob), ext: mime.includes("mp4") ? "mp4" : "webm" });
   }
 
-  const busy = state.step === "recording";
+  const busy = state.step === "working";
   return (
     <div className="flex flex-col gap-3">
       <canvas
@@ -123,12 +134,12 @@ export default function VideoMaker({ loss, demo, layout, children }: { loss: Pub
         ) : (
           <button type="button" onClick={make} disabled={busy} className="btn btn-ghost h-12 gap-2 px-5 text-[15px]">
             <PlayIcon />
-            {busy ? `Recording… ${state.left}s` : "Make a video"}
+            {state.step === "working" ? state.label : "Make a video"}
           </button>
         )}
-        {busy && <span className="text-sm text-dim">Keep this tab open while it records.</span>}
+        {busy && <span className="text-sm text-dim">Keep this tab open.</span>}
         {state.step === "done" && state.ext === "webm" && (
-          <span className="text-sm text-dim">Saved as WebM, which X doesn't accept. Chrome or Safari save MP4.</span>
+          <span className="text-sm text-dim">This browser could only save WebM, which X doesn't accept. Chrome, Edge or Safari save MP4.</span>
         )}
         {state.step === "done" && (
           <button type="button" onClick={make} className="text-sm font-medium text-lilac underline-offset-4 hover:underline">
@@ -139,6 +150,51 @@ export default function VideoMaker({ loss, demo, layout, children }: { loss: Pub
       {state.step === "error" && <p className="text-sm text-loss">{state.message}</p>}
     </div>
   );
+}
+
+/**
+ * Codifica o vídeo quadro a quadro com WebCodecs, mais rápido que o tempo real e sempre em MP4.
+ * null quando o navegador não tem WebCodecs ou não codifica H.264; aí o vídeo é gravado com o MediaRecorder.
+ */
+async function encodeMp4(el: HTMLCanvasElement, draw: (t: number) => void, progress: (done: number) => void): Promise<Blob | null> {
+  if (typeof VideoEncoder === "undefined" || typeof VideoFrame === "undefined") return null;
+  const { width, height } = el;
+  let config: VideoEncoderConfig | undefined;
+  for (const codec of CODECS) {
+    const c: VideoEncoderConfig = { codec, width, height, bitrate: 8_000_000, framerate: FPS, avc: { format: "avc" } };
+    if ((await VideoEncoder.isConfigSupported(c).catch(() => null))?.supported) {
+      config = c;
+      break;
+    }
+  }
+  if (!config) return null;
+
+  const { Muxer, ArrayBufferTarget } = await import("mp4-muxer");
+  // fastStart "in-memory" põe o índice no começo do arquivo: o X recusa MP4 com o índice no fim
+  const muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: "avc", width, height, frameRate: FPS }, fastStart: "in-memory" });
+  let failure: unknown = null;
+  const encoder = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => (failure = e) });
+  encoder.configure(config);
+
+  const frames = Math.ceil(DURATION * FPS) + 6;
+  for (let i = 0; i < frames; i++) {
+    if (failure) throw failure;
+    draw(Math.min(i / FPS, DURATION));
+    const frame = new VideoFrame(el, { timestamp: Math.round((i * 1e6) / FPS), duration: Math.round(1e6 / FPS) });
+    encoder.encode(frame, { keyFrame: i % (FPS * 2) === 0 });
+    frame.close();
+    // Não deixa a fila do codificador crescer, e dá um respiro para a tela mostrar o progresso
+    while (encoder.encodeQueueSize > 6) await new Promise((r) => setTimeout(r, 4));
+    if (i % 8 === 0) {
+      progress(i / frames);
+      await new Promise((r) => setTimeout(r));
+    }
+  }
+  await encoder.flush();
+  encoder.close();
+  if (failure) throw failure;
+  muxer.finalize();
+  return new Blob([muxer.target.buffer], { type: "video/mp4" });
 }
 
 function PlayIcon() {

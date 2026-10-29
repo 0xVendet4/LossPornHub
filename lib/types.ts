@@ -43,5 +43,8 @@ export type Loss = {
   example?: boolean;
 };
 
-/** Versão pública: sem a lista de quem deu F. */
-export type PublicLoss = Omit<Loss, "respectedBy">;
+/**
+ * Versão pública: sem carteira, assinatura (que revela a carteira), transação e lista de quem deu F.
+ * `author` é o apelido da carteira (ver lib/author.ts); "" na prévia de quem está postando, "example" nos exemplos.
+ */
+export type PublicLoss = Omit<Loss, "respectedBy" | "wallet" | "signature" | "txHash"> & { author: string };

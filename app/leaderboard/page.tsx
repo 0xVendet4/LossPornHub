@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { leaderboard, type LeaderRow } from "@/lib/store";
 import { CHAINS, isChainKey } from "@/lib/chains";
-import { painUsd, short } from "@/lib/format";
+import { painUsd } from "@/lib/format";
+import { authorName } from "@/lib/privacy";
 import { tierOf } from "@/lib/tier";
 import TokenAvatar from "@/components/TokenAvatar";
 import { IconArrow } from "@/components/Icons";
@@ -20,10 +21,12 @@ const PODIUM = [
   { place: 2, order: "order-3", lift: "sm:mt-16" },
 ];
 
+// Só o apelido: a carteira de quem postou nunca aparece no site
 function Who({ row }: { row: LeaderRow }) {
+  if (row.author === "example") return <span className="text-xs text-dim">{authorName(row.author)}</span>;
   return (
-    <Link href={`/w/${row.wallet}`} className="font-mono text-xs text-dim hover:text-fg" title="See every post from this wallet">
-      {short(row.wallet)}
+    <Link href={`/w/${row.author}`} className="font-mono text-xs text-dim hover:text-fg" title="See every post from this person">
+      {authorName(row.author)}
     </Link>
   );
 }
@@ -111,7 +114,7 @@ export default async function Leaderboard() {
                 const rank = (podium ? 4 : 1) + i;
                 return (
                   <li
-                    key={row.wallet}
+                    key={`${rank}-${row.author}`}
                     className="grid grid-cols-[1.75rem_minmax(0,1fr)_auto] items-center gap-x-4 border-b border-line px-4 py-4 transition-colors last:border-b-0 hover:bg-raise/40 sm:grid-cols-[2rem_auto_minmax(0,1fr)_8.5rem_4.5rem] sm:px-6"
                   >
                     <span className="text-sm font-medium text-dim tabular-nums">{rank}</span>

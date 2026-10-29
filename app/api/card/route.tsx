@@ -3,9 +3,10 @@ import { ImageResponse } from "next/og";
 import { CHAINS } from "@/lib/chains";
 import { demoCandles, fetchCandles, type Candle } from "@/lib/candles";
 import { candlesMatch, plotCandles } from "@/lib/candle-plot";
-import { amount, date, money, multiple, painUsd, price, short, usd } from "@/lib/format";
+import { amount, date, money, multiple, painUsd, price, usd } from "@/lib/format";
 import { scanWallet, ScanError } from "@/lib/scan";
 import { draftFromReport } from "@/lib/scan/draft";
+import { toPublic } from "@/lib/privacy";
 import { getLoss } from "@/lib/store";
 import { tierOf } from "@/lib/tier";
 import type { PublicLoss } from "@/lib/types";
@@ -54,18 +55,11 @@ async function resolveLoss(req: NextRequest): Promise<PublicLoss | NextResponse>
   }
   const draft = draftFromReport(report, target);
   if (typeof draft === "string") return fail(draft);
-  return {
-    ...draft,
-    id: "card",
-    family: report.family,
-    wallet: report.demo ? "example" : report.wallet,
-    target,
-    caption,
-    signature: "",
-    respects: 0,
-    createdAt: Date.now(),
-    example: report.demo,
-  };
+  // Mesmos números arredondados de um post: o PNG vai ser compartilhado
+  return toPublic(
+    { ...draft, id: "card", family: report.family, wallet: report.wallet, target, caption, signature: "", respects: 0, respectedBy: [], createdAt: Date.now(), example: report.demo },
+    "",
+  );
 }
 
 type Move = { from: number; to: number; fromLabel: string; toLabel: string };
@@ -160,8 +154,6 @@ export async function GET(req: NextRequest) {
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 18px", borderRadius: 999, background: C.raise, border: `1px solid ${C.line}`, fontSize: 22, color: C.dim }}>
         <div style={{ width: 10, height: 10, borderRadius: 999, background: chain.color }} />
         {network}
-        <span>·</span>
-        <span>{short(loss.wallet)}</span>
       </div>
     </div>
   );

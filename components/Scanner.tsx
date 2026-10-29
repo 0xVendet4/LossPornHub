@@ -8,6 +8,7 @@ import bs58 from "bs58";
 import { CHAINS, walletKey } from "@/lib/chains";
 import { amount, date, money, multiple, price, short, usd } from "@/lib/format";
 import { buildPostMessage } from "@/lib/message";
+import { toPublic } from "@/lib/privacy";
 import { draftFromReport } from "@/lib/scan/draft";
 import type { Report, TokenStat } from "@/lib/scan/types";
 import LossCard from "./LossCard";
@@ -566,17 +567,11 @@ function Composer({
 
   const owner = !report.demo && !!connected && walletKey(connected) === walletKey(report.wallet);
   const cardUrl = `/api/card?wallet=${encodeURIComponent(report.wallet)}&target=${encodeURIComponent(target)}&caption=${encodeURIComponent(caption.trim())}${layout === "wide" ? "&layout=wide" : ""}`;
-  const preview = {
-    ...draft,
-    id: "preview",
-    family: report.family,
-    wallet: report.wallet === "demo" ? "example" : report.wallet,
-    target,
-    caption: caption.trim(),
-    signature: "",
-    respects: 0,
-    createdAt: Date.now(),
-  };
+  // Passa pelo mesmo filtro do post publicado: sem carteira e com os números arredondados
+  const preview = toPublic(
+    { ...draft, id: "preview", family: report.family, wallet: report.wallet, target, caption: caption.trim(), signature: "", respects: 0, respectedBy: [], createdAt: Date.now() },
+    report.demo ? "example" : "",
+  );
 
   async function post() {
     setError("");

@@ -13,7 +13,6 @@ export type Scene = {
   symbol: string;
   chainName: string;
   chainColor: string;
-  wallet: string;
   amountUsd: number;
   soldAmount: number;
   soldUsd: number;
@@ -100,7 +99,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, W: number, H: number, s
   ctx.fillStyle = "#d9b3e0";
   ctx.fillText("Hub", P + 56 + ctx.measureText("LossPorn").width, hy + 1);
   ctx.font = `500 24px ${sans}`;
-  const tag = `${s.chainName} · ${s.wallet}`;
+  const tag = s.chainName;
   const tw = ctx.measureText(tag).width;
   ctx.fillStyle = C.raise;
   roundRect(ctx, W - P - tw - 64, hy - 24, tw + 64, 48, 24);
