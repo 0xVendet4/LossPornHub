@@ -1,0 +1,312 @@
+@import "tailwindcss";
+
+/*
+ * Direção: app de carteira premium. Fundo noturno com brilhos suaves em lilás e rosa,
+ * superfícies de vidro bem arredondadas, tipografia geométrica limpa e muito respiro.
+ * Coral só para perdas; o gradiente lilás→rosa é a marca.
+ */
+@theme {
+  --color-night: #0e0d12;   /* fundo */
+  --color-card: #17161d;    /* superfícies */
+  --color-raise: #211f29;   /* campos, botões secundários */
+  --color-line: #2b2934;    /* bordas */
+  --color-fg: #f4f2f8;      /* texto */
+  --color-dim: #9b97a9;     /* texto secundário */
+  --color-lilac: #b9a7ff;   /* marca */
+  --color-rose: #ff94b8;    /* marca, fim do gradiente */
+  --color-loss: #ff6d74;    /* perdas */
+  --color-gain: #62e0a8;    /* subida */
+  /* Marcas de gráfico (validadas contra a superfície escura) */
+  --color-evm: #7f6cf0;
+  --color-sol: #d9628f;
+}
+
+@theme inline {
+  --font-display: var(--font-sora), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, Menlo, monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-night);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+}
+
+/* Brilhos de fundo, fixos atrás de tudo */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(42rem 30rem at 12% -6%, rgb(185 167 255 / 0.16), transparent 70%),
+    radial-gradient(36rem 26rem at 92% 4%, rgb(255 148 184 / 0.12), transparent 70%),
+    radial-gradient(50rem 30rem at 50% 110%, rgb(185 167 255 / 0.07), transparent 70%);
+}
+
+/* Grão bem leve por cima dos brilhos, para o fundo não parecer chapado */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+h1, h2, h3 {
+  text-wrap: balance;
+  letter-spacing: -0.03em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-lilac);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: rgb(185 167 255 / 0.35);
+}
+
+@layer components {
+  .surface {
+    background: color-mix(in srgb, var(--color-card) 90%, transparent);
+    border: 1px solid var(--color-line);
+    border-radius: 24px;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.04),
+      0 24px 60px -30px rgb(0 0 0 / 0.7);
+    backdrop-filter: blur(14px);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 999px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: transform 0.15s ease, filter 0.15s ease, background-color 0.15s, border-color 0.15s;
+  }
+  .btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--color-lilac), var(--color-rose));
+    color: #17131f;
+    box-shadow: 0 10px 30px -10px rgb(185 167 255 / 0.55);
+  }
+  .btn-primary:hover:not(:disabled) {
+    filter: brightness(1.07);
+  }
+  .btn-ghost {
+    background: var(--color-raise);
+    border: 1px solid var(--color-line);
+    color: var(--color-fg);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    border-color: #4a4656;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-line);
+    background: var(--color-raise);
+    padding: 0.25rem 0.65rem;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-dim);
+  }
+
+  .label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-dim);
+  }
+
+  .grad-text {
+    background: linear-gradient(100deg, var(--color-lilac), var(--color-rose));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Controle segmentado (menu e abas do feed) */
+  .seg {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-line);
+    background: color-mix(in srgb, var(--color-card) 80%, transparent);
+    padding: 0.25rem;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .seg > * {
+    white-space: nowrap;
+    border-radius: 999px;
+    padding: 0.375rem 0.875rem;
+    color: var(--color-dim);
+    transition: color 0.15s, background-color 0.15s;
+  }
+  .seg > *:hover {
+    color: var(--color-fg);
+  }
+  .seg > [aria-current="page"],
+  .seg > [aria-selected="true"] {
+    background: var(--color-raise);
+    color: var(--color-fg);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 1px 2px rgb(0 0 0 / 0.4);
+  }
+
+  /* Superfície com borda em gradiente, para o elemento principal de cada tela */
+  .surface-glow {
+    position: relative;
+    background:
+      linear-gradient(var(--color-card), var(--color-card)) padding-box,
+      linear-gradient(140deg, rgb(185 167 255 / 0.7), rgb(255 148 184 / 0.25) 45%, var(--color-line) 70%) border-box;
+    border: 1px solid transparent;
+    border-radius: 28px;
+    box-shadow: 0 30px 80px -40px rgb(185 167 255 / 0.45);
+  }
+
+  /* Card que levanta no hover (o .rise usa `translate`, então os dois convivem) */
+  .card-hover {
+    transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.25s, box-shadow 0.25s;
+  }
+  .card-hover:hover {
+    transform: translateY(-3px);
+    border-color: #3b3847;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.05),
+      0 30px 70px -30px rgb(0 0 0 / 0.8),
+      0 0 0 1px rgb(185 167 255 / 0.08);
+  }
+
+  /* Grade fina atrás do hero, sumindo nas bordas */
+  .grid-bg {
+    background-image:
+      linear-gradient(rgb(255 255 255 / 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(255 255 255 / 0.04) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 60% 55% at 50% 35%, #000 10%, transparent 70%);
+  }
+
+  /* Blocos de carregamento */
+  .skeleton {
+    display: block;
+    border-radius: 10px;
+    background: linear-gradient(90deg, var(--color-raise) 25%, var(--color-line) 50%, var(--color-raise) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
+  }
+
+  .field {
+    background: var(--color-raise);
+    border: 1px solid var(--color-line);
+    border-radius: 16px;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .field:focus,
+  .field:focus-within {
+    border-color: var(--color-lilac);
+    box-shadow: 0 0 0 4px rgb(185 167 255 / 0.15);
+  }
+}
+
+/* Fita de cotações */
+@keyframes tape {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.tape { animation: tape 70s linear infinite; }
+.tape:hover { animation-play-state: paused; }
+
+@keyframes rise {
+  from { translate: 0 12px; opacity: 0.4; }
+  to { translate: 0 0; opacity: 1; }
+}
+.rise { animation: rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(98 224 168 / 0.5); }
+  50% { box-shadow: 0 0 0 6px rgb(98 224 168 / 0); }
+}
+.live-dot { animation: pulse-dot 2s ease-in-out infinite; }
+
+@keyframes draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+.draw {
+  stroke-dasharray: 1;
+  animation: draw 1.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.fade { animation: fade 0.7s ease both; }
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@keyframes pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+.pop { animation: pop 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.float { animation: float 6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tape, .rise, .live-dot, .draw, .float, .fade, .skeleton, .pop { animation: none; }
+  .card-hover:hover { transform: none; }
+}
+
+/* Modal de carteiras Solana no visual do site */
+.wallet-adapter-modal-wrapper {
+  background: var(--color-card) !important;
+  border: 1px solid var(--color-line);
+  border-radius: 24px !important;
+  font-family: var(--font-sans) !important;
+}
+.wallet-adapter-modal-title {
+  font-family: var(--font-display) !important;
+  font-weight: 600 !important;
+}
+.wallet-adapter-modal-list .wallet-adapter-button {
+  font-family: var(--font-sans) !important;
+  border-radius: 14px !important;
+}
+.wallet-adapter-modal-list .wallet-adapter-button:hover {
+  background: var(--color-raise) !important;
+}
+.wallet-adapter-modal-button-close {
+  background: var(--color-raise) !important;
+}
