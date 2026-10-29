@@ -17,7 +17,7 @@ export function parsePost(body: any): { ok: true; req: PostRequest } | { ok: fal
     return { ok: false, error: "Invalid request." };
   const family = detectFamily(wallet);
   if (!family) return { ok: false, error: "Invalid wallet address." };
-  if (!/^(wallet|(missed|realized):[a-z]+:[A-Za-z0-9]{20,64})$/.test(target)) return { ok: false, error: "Invalid post." };
+  if (!/^(total|wallet|(missed|realized):[a-z]+:[A-Za-z0-9]{20,64})$/.test(target)) return { ok: false, error: "Invalid post." };
   if (caption.length > 280 || caption !== caption.trim()) return { ok: false, error: "Invalid caption (up to 280 characters)." };
   if (!Number.isFinite(timestamp) || Math.abs(Date.now() - timestamp) > MAX_AGE_MS)
     return { ok: false, error: "The signature expired. Sign again." };

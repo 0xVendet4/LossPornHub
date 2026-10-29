@@ -1,6 +1,7 @@
 import type { ChainKey } from "../chains";
 
 type Pair = {
+  pairAddress?: string;
   info?: { imageUrl?: string };
   baseToken?: { address?: string; symbol?: string; name?: string };
   quoteToken?: { address?: string; symbol?: string; name?: string };
@@ -16,7 +17,7 @@ export const addrKey = (chain: ChainKey, address: string) =>
  * Preço atual em USD pela DexScreener (grátis, sem chave), usando o par de maior liquidez.
  * Token que não tem par listado fica de fora do mapa.
  */
-export type Quote = { price: number; logo?: string; symbol?: string; name?: string };
+export type Quote = { price: number; logo?: string; symbol?: string; name?: string; /** Par de maior liquidez, usado nos candles. */ pool?: string };
 
 export async function currentPrices(chain: ChainKey, addresses: string[]): Promise<Map<string, Quote>> {
   const prices = new Map<string, Quote>();
@@ -25,7 +26,7 @@ export async function currentPrices(chain: ChainKey, addresses: string[]): Promi
   for (let i = 0; i < unique.length; i += 30) {
     const chunk = unique.slice(i, i + 30);
     const wanted = new Set(chunk);
-    const best = new Map<string, { price: number; liq: number; logo?: string; symbol?: string; name?: string }>();
+    const best = new Map<string, { price: number; liq: number; logo?: string; symbol?: string; name?: string; pool?: string }>();
     try {
       const res = await fetch(`https://api.dexscreener.com/tokens/v1/${chain}/${chunk.join(",")}`, {
         cache: "no-store",
@@ -43,7 +44,7 @@ export async function currentPrices(chain: ChainKey, addresses: string[]): Promi
           if (!wanted.has(k)) return;
           const cur = best.get(k);
           if (!cur || liq > cur.liq)
-            best.set(k, { price, liq, logo: logo ?? cur?.logo, symbol: token.symbol || cur?.symbol, name: token.name || cur?.name });
+            best.set(k, { price, liq, logo: logo ?? cur?.logo, symbol: token.symbol || cur?.symbol, name: token.name || cur?.name, pool: p.pairAddress });
         };
         consider(p.baseToken, priceUsd, p.info?.imageUrl);
         // Quando o token é a cotação do par: preço = priceUsd do base ÷ quanto o base vale em cotação
@@ -52,7 +53,7 @@ export async function currentPrices(chain: ChainKey, addresses: string[]): Promi
     } catch {
       continue;
     }
-    best.forEach((v, k) => prices.set(k, { price: v.price, logo: v.logo, symbol: v.symbol, name: v.name }));
+    best.forEach((v, k) => prices.set(k, { price: v.price, logo: v.logo, symbol: v.symbol, name: v.name, pool: v.pool }));
   }
   return prices;
 }

@@ -46,19 +46,26 @@ export default function MoveChart({
         <circle cx={x1} cy={y1} r="4.5" fill="var(--color-dim)" stroke={ring} strokeWidth="2" />
         <circle cx={x2} cy={y2} r="5.5" fill="var(--color-loss)" stroke={ring} strokeWidth="2" />
       </svg>
-      <figcaption className="flex items-start justify-between gap-3 text-[13px]">
-        <span className="flex flex-col">
-          <span className="text-dim">{fromLabel}</span>
-          <span className="font-medium tabular-nums">{price(from)}</span>
-        </span>
-        <span className="flex flex-col items-end text-right">
-          <span className="text-dim">{toLabel}</span>
-          <span className="flex items-center gap-1.5 font-medium tabular-nums">
-            {price(to)}
-            {mult ? <span className="rounded-full bg-loss/15 px-1.5 py-px text-[11px] font-semibold text-loss">{fmtMultiple(mult)}</span> : null}
-          </span>
-        </span>
-      </figcaption>
+      <MoveCaption from={from} to={to} fromLabel={fromLabel} toLabel={toLabel} mult={mult} />
     </figure>
+  );
+}
+
+/** Legenda embaixo do gráfico: preço de partida à esquerda, preço final à direita. */
+export function MoveCaption({ from, to, fromLabel, toLabel, mult }: { from: number; to: number; fromLabel: string; toLabel: string; mult?: number | null }) {
+  return (
+    <figcaption className="flex items-start justify-between gap-3 text-[13px]">
+      <span className="flex flex-col">
+        <span className="text-dim">{fromLabel}</span>
+        <span className="font-medium tabular-nums">{price(from)}</span>
+      </span>
+      <span className="flex flex-col items-end text-right">
+        <span className="text-dim">{toLabel}</span>
+        <span className="flex items-center gap-1.5 font-medium tabular-nums">
+          {price(to)}
+          {mult ? <span className="rounded-full bg-loss/15 px-1.5 py-px text-[11px] font-semibold text-loss">{fmtMultiple(mult)}</span> : null}
+        </span>
+      </span>
+    </figcaption>
   );
 }

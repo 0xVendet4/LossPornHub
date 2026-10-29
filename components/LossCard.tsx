@@ -3,17 +3,19 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CHAINS } from "@/lib/chains";
-import { ago, amount, date, money, multiple, painUsd, short } from "@/lib/format";
+import { ago, amount, date, money, multiple, painUsd, short, usd } from "@/lib/format";
 import { tierOf } from "@/lib/tier";
 import type { PublicLoss } from "@/lib/types";
+import CandleChart from "./CandleChart";
 import MoveChart from "./MoveChart";
 import TokenAvatar from "./TokenAvatar";
-import { IconCheck, IconDownload, IconExternal, IconTrendDown, IconTrendUp, IconWallet, IconX } from "./Icons";
+import { IconCheck, IconDownload, IconExternal, IconFlame, IconTrendDown, IconTrendUp, IconWallet, IconWide, IconX } from "./Icons";
 
 const KIND = {
   missed: { label: "Left on the table", icon: IconTrendUp },
   realized: { label: "Realized loss", icon: IconTrendDown },
   wallet: { label: "Whole wallet", icon: IconWallet },
+  total: { label: "Total loss porn", icon: IconFlame },
 } as const;
 
 /** Medidor de dor: o preenchimento carrega a gravidade, o trilho é a mesma cor bem mais fraca. */
@@ -69,9 +71,11 @@ export default function LossCard({ loss, preview = false, delay = 0 }: { loss: P
     const text =
       loss.kind === "realized"
         ? `Lost ${money(loss.amountUsd)} on ${sym} buying high and selling low.`
-        : loss.kind === "wallet"
-          ? `Left ${money(loss.amountUsd)} on the table selling ${loss.tokensCount} tokens too early.`
-          : `Left ${money(loss.amountUsd)} on the table selling ${sym} too early. It went up ${loss.multiple ? multiple(loss.multiple) : "a lot"} after.`;
+        : loss.kind === "total"
+          ? `${money(loss.amountUsd)} of total loss porn across ${loss.tokensCount} tokens.`
+          : loss.kind === "wallet"
+            ? `Left ${money(loss.amountUsd)} on the table selling ${loss.tokensCount} tokens too early.`
+            : `Left ${money(loss.amountUsd)} on the table selling ${sym} too early. It went up ${loss.multiple ? multiple(loss.multiple) : "a lot"} after.`;
     const url = `${window.location.origin}/p/${loss.id}`;
     window.open(`https://x.com/intent/post?text=${encodeURIComponent(text + " On-chain wallet scan:")}&url=${encodeURIComponent(url)}`, "_blank", "noopener");
   }
@@ -84,8 +88,10 @@ export default function LossCard({ loss, preview = false, delay = 0 }: { loss: P
         ? { from: loss.boughtUsd / qty, to: loss.soldUsd / qty, fromLabel: "Bought at", toLabel: "Sold at" }
         : null;
 
-  const title = loss.kind === "wallet" ? `${loss.tokensCount ?? "Several"} tokens` : `$${loss.token.toUpperCase()}`;
-  const network = loss.kind === "wallet" ? (loss.family === "solana" ? "Solana" : "EVM") : chain.name;
+  const summary = loss.kind === "wallet" || loss.kind === "total";
+  const title = summary ? `${loss.tokensCount ?? "Several"} tokens` : `$${loss.token.toUpperCase()}`;
+  const network = summary ? (loss.family === "solana" ? "Solana" : "EVM") : chain.name;
+  const demo = !!loss.example || loss.wallet === "example";
 
   return (
     <article
@@ -127,6 +133,10 @@ export default function LossCard({ loss, preview = false, delay = 0 }: { loss: P
             <p className="text-sm text-dim">
               Went up <span className="font-medium text-fg">{multiple(loss.multiple)}</span> after you sold
             </p>
+          ) : loss.kind === "total" ? (
+            <p className="text-sm text-dim">
+              Across {loss.tokensCount} tokens. The worst was <span className="font-medium text-fg">${loss.token.toUpperCase()}</span>.
+            </p>
           ) : loss.kind === "wallet" ? (
             <p className="text-sm text-dim">
               Across {loss.tokensCount} tokens sold too early. The worst was <span className="font-medium text-fg">${loss.token.toUpperCase()}</span>.
@@ -134,9 +144,27 @@ export default function LossCard({ loss, preview = false, delay = 0 }: { loss: P
           ) : null}
         </div>
 
+        {loss.kind === "total" && (
+          <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-line text-[13px]">
+            {[
+              ["Left on the table", money(loss.missedUsd ?? 0)],
+              ["Realized loss", usd(loss.realizedLossUsd ?? 0)],
+            ].map(([label, value]) => (
+              <div key={label} className="flex flex-col gap-1 bg-raise p-4">
+                <dt className="text-dim">{label}</dt>
+                <dd className="text-lg font-semibold tabular-nums text-loss">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+
         {move && (
           <div className="flex flex-col gap-3 rounded-2xl bg-raise/70 p-4 [--chart-surface:#1f1d27]">
-            <MoveChart {...move} id={loss.id} />
+            {loss.kind === "missed" && loss.tokenAddress && loss.lastSellAt ? (
+              <CandleChart {...move} id={loss.id} source={{ chain: loss.chain, token: loss.tokenAddress, pool: loss.pool, since: loss.lastSellAt, demo }} />
+            ) : (
+              <MoveChart {...move} id={loss.id} />
+            )}
             <p className="border-t border-line pt-3 text-[13px] leading-relaxed text-dim">
               {loss.kind === "missed" ? (
                 <>
@@ -202,6 +230,17 @@ export default function LossCard({ loss, preview = false, delay = 0 }: { loss: P
               className="inline-flex size-8 items-center justify-center rounded-full text-dim transition-colors hover:bg-raise hover:text-fg"
             >
               <IconDownload className="size-4" />
+            </a>
+          )}
+          {!preview && (
+            <a
+              href={`/api/card?id=${loss.id}&layout=wide`}
+              download
+              aria-label="Download wide card as image"
+              title="Download wide card (for X)"
+              className="inline-flex size-8 items-center justify-center rounded-full text-dim transition-colors hover:bg-raise hover:text-fg"
+            >
+              <IconWide className="size-4" />
             </a>
           )}
           {!preview && (

@@ -1,25 +1,27 @@
 import { ImageResponse } from "next/og";
 import { getLoss } from "@/lib/store";
-import { multiple, painUsd } from "@/lib/format";
+import { money, multiple, painUsd } from "@/lib/format";
 
 export const alt = "Wallet scan on LossPornHub";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-const KIND = { missed: "Left on the table", realized: "Realized loss", wallet: "Whole wallet on the table" };
+const KIND = { missed: "Left on the table", realized: "Realized loss", wallet: "Whole wallet on the table", total: "Total loss porn" };
 
 /** Imagem de prévia do post para X, Telegram, WhatsApp etc. */
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const loss = await getLoss(id);
-  const sym = loss ? (loss.kind === "wallet" ? `${loss.tokensCount} tokens` : `$${loss.token.toUpperCase()}`) : "";
+  const sym = loss ? (loss.kind === "wallet" || loss.kind === "total" ? `${loss.tokensCount} tokens` : `$${loss.token.toUpperCase()}`) : "";
   const detail = !loss
     ? ""
     : loss.kind === "missed" && loss.multiple
       ? `Went up ${multiple(loss.multiple)} after the sell`
-      : loss.kind === "wallet"
-        ? `The worst was $${loss.token.toUpperCase()}`
-        : "Bought high, sold low";
+      : loss.kind === "total"
+        ? `${money(loss.missedUsd ?? 0)} left on the table + ${money(loss.realizedLossUsd ?? 0)} lost`
+        : loss.kind === "wallet"
+          ? `The worst was $${loss.token.toUpperCase()}`
+          : "Bought high, sold low";
 
   return new ImageResponse(
     (

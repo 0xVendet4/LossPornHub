@@ -36,6 +36,8 @@ export type TokenStat = {
   realizedUsd: number | null;
   lastSellAt: number;
   lastSellTx: string;
+  /** Par de maior liquidez na DexScreener, para buscar os candles. */
+  pool?: string;
 };
 
 export type Report = {

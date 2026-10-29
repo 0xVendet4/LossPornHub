@@ -12,10 +12,11 @@ import { draftFromReport } from "@/lib/scan/draft";
 import type { Report, TokenStat } from "@/lib/scan/types";
 import LossCard from "./LossCard";
 import CountUp from "./CountUp";
-import MoveChart from "./MoveChart";
+import CandleChart from "./CandleChart";
+import VideoMaker, { type Layout } from "./VideoMaker";
 import TokenAvatar from "./TokenAvatar";
 import { Badge, EvmButton, SolButton } from "./WalletButtons";
-import { IconAlert, IconArrow, IconCheck, IconDownload, IconInfo, IconSearch, IconTrendUp } from "./Icons";
+import { IconAlert, IconArrow, IconCheck, IconDownload, IconFlame, IconInfo, IconSearch, IconTrendUp } from "./Icons";
 
 type ScanError = { error: string; code?: string; hosted?: boolean };
 
@@ -265,6 +266,7 @@ function ReportView({
   const worst = tokens.find((t) => (t.missedUsd ?? 0) > 0);
   const missedCount = tokens.filter((t) => (t.missedUsd ?? 0) > 0).length;
   const goodSells = tokens.filter((t) => (t.missedUsd ?? 0) < 0).length;
+  const totalPain = totals.missedUsd + totals.realizedLossUsd;
 
   return (
     <div className="fade flex flex-col gap-10">
@@ -311,25 +313,40 @@ function ReportView({
       ) : (
         <>
           <section className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-            <div className="surface-glow flex flex-col items-start gap-5 p-6 sm:p-8">
+            <div className="surface-glow flex flex-col items-start justify-center gap-5 p-6 sm:p-8">
               <span className="inline-flex items-center gap-1.5 text-sm font-medium text-loss">
-                <IconTrendUp />
-                Left on the table by selling early
+                <IconFlame />
+                Total loss porn
               </span>
               <p className="whitespace-nowrap font-sans text-[clamp(2.75rem,8vw,5rem)] font-semibold leading-none tracking-[-0.04em]">
-                <CountUp value={totals.missedUsd} format="money" />
+                <CountUp value={totalPain} format="money" />
               </p>
               <p className="max-w-[48ch] leading-relaxed text-dim">
-                That's the gap between what you got selling {missedCount} token{missedCount === 1 ? "" : "s"} and what they'd be worth
-                at today's price.
+                Everything you left on the table selling early, plus what you lost buying high and selling low.
               </p>
-              {totals.missedUsd > 0 && (
-                <PostButton onClick={() => setTarget("wallet")} active={target === "wallet"}>
-                  Post the total
-                </PostButton>
-              )}
+              <div className="flex flex-wrap items-center gap-2.5">
+                {totalPain > 0 && (
+                  <PostButton onClick={() => setTarget("total")} active={target === "total"}>
+                    Post the total
+                  </PostButton>
+                )}
+                {totals.missedUsd > 0 && totals.realizedLossUsd > 0 && (
+                  <SmallPost onClick={() => setTarget("wallet")} active={target === "wallet"}>
+                    Post only what I left on the table
+                  </SmallPost>
+                )}
+              </div>
             </div>
             <dl className="grid content-start gap-5">
+              <div className="surface flex flex-col gap-2 p-5">
+                <dt className="label">Left on the table</dt>
+                <dd className="font-sans text-4xl font-semibold leading-none tracking-[-0.03em] text-loss">
+                  <CountUp value={totals.missedUsd} format="money" />
+                </dd>
+                <p className="text-sm leading-relaxed text-dim">
+                  What {missedCount} token{missedCount === 1 ? "" : "s"} you sold would be worth today, minus what you got for them.
+                </p>
+              </div>
               <div className="surface flex flex-col gap-2 p-5">
                 <dt className="label">Realized loss</dt>
                 <dd className="font-sans text-4xl font-semibold leading-none tracking-[-0.03em] text-loss">
@@ -384,7 +401,14 @@ function ReportView({
                     {multiple(worst.multiple)} since the sell
                   </span>
                 </div>
-                <MoveChart from={worst.avgSellPrice} to={worst.priceNow} fromLabel="You sold here" toLabel="Today" id="worst" />
+                <CandleChart
+                  from={worst.avgSellPrice}
+                  to={worst.priceNow}
+                  fromLabel="You sold here"
+                  toLabel="Today"
+                  id="worst"
+                  source={{ chain: worst.chain, token: worst.address, pool: worst.pool, since: worst.lastSellAt, demo: report.demo }}
+                />
               </div>
             </section>
           )}
@@ -522,6 +546,7 @@ function Composer({
   const sol = useWallet();
   const ref = useRef<HTMLElement>(null);
   const [caption, setCaption] = useState("");
+  const [layout, setLayout] = useState<Layout>("tall");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -533,7 +558,18 @@ function Composer({
   if (typeof draft === "string") return null;
 
   const owner = !report.demo && !!connected && walletKey(connected) === walletKey(report.wallet);
-  const cardUrl = `/api/card?wallet=${encodeURIComponent(report.wallet)}&target=${encodeURIComponent(target)}&caption=${encodeURIComponent(caption.trim())}`;
+  const cardUrl = `/api/card?wallet=${encodeURIComponent(report.wallet)}&target=${encodeURIComponent(target)}&caption=${encodeURIComponent(caption.trim())}${layout === "wide" ? "&layout=wide" : ""}`;
+  const preview = {
+    ...draft,
+    id: "preview",
+    family: report.family,
+    wallet: report.wallet === "demo" ? "example" : report.wallet,
+    target,
+    caption: caption.trim(),
+    signature: "",
+    respects: 0,
+    createdAt: Date.now(),
+  };
 
   async function post() {
     setError("");
@@ -563,20 +599,7 @@ function Composer({
 
   return (
     <section ref={ref} className="surface-glow grid scroll-mt-28 items-start gap-8 p-5 sm:p-7 lg:grid-cols-[380px_minmax(0,1fr)]">
-      <LossCard
-        preview
-        loss={{
-          ...draft,
-          id: "preview",
-          family: report.family,
-          wallet: report.wallet === "demo" ? "example" : report.wallet,
-          target,
-          caption: caption.trim(),
-          signature: "",
-          respects: 0,
-          createdAt: Date.now(),
-        }}
-      />
+      <LossCard preview loss={preview} />
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <h3 className="font-display text-xl font-semibold">Post to the feed</h3>
@@ -619,16 +642,43 @@ function Composer({
           <button type="button" onClick={post} disabled={!owner || busy} className="btn btn-primary h-12 px-6 text-[15px]">
             {busy ? "Waiting for signature…" : "Sign and post"}
           </button>
-          <a href={cardUrl} download className="btn btn-ghost h-12 px-5 text-sm">
-            <IconDownload className="size-4" />
-            Download card
-          </a>
           <button type="button" onClick={onCancel} className="btn btn-ghost h-12 px-5 text-sm">
             Cancel
           </button>
         </div>
+
+        <div className="flex flex-col gap-3 border-t border-line pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="label">Share it without posting</span>
+            <div role="radiogroup" aria-label="Format" className="inline-flex rounded-full border border-line bg-raise p-1 text-[13px]">
+              {(
+                [
+                  ["tall", "Vertical"],
+                  ["wide", "Horizontal"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={layout === value}
+                  onClick={() => setLayout(value)}
+                  className={`h-8 rounded-full px-3.5 font-medium transition-colors ${layout === value ? "bg-lilac/20 text-lilac" : "text-dim hover:text-fg"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <VideoMaker loss={preview} demo={!!report.demo} layout={layout}>
+            <a href={cardUrl} download className="btn btn-ghost h-12 gap-2 px-5 text-[15px]">
+              <IconDownload className="size-4" />
+              Download card
+            </a>
+          </VideoMaker>
+        </div>
         <p className="text-xs leading-relaxed text-dim">
-          The card is a PNG you can share anywhere, no posting needed. The signature only proves the wallet is yours. It's not a transaction and costs no gas. The numbers are recomputed on the
+          {draft.kind === "missed" ? "The card is a PNG and the video a timelapse of the price since you sold, both made to share anywhere." : "The card is a PNG you can share anywhere, no posting needed."} The signature only proves the wallet is yours. It's not a transaction and costs no gas. The numbers are recomputed on the
           server from the blockchain.
         </p>
       </div>

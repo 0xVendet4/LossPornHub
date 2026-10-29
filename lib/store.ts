@@ -4,6 +4,9 @@ import type { Loss, LossKind, PublicLoss } from "./types";
 import { fileBackend } from "./store-file";
 import { neonQuery, pgBackend } from "./store-pg";
 
+/** Posts que resumem a carteira inteira: ficam fora das somas, senão o mesmo prejuízo contaria duas vezes. */
+const SUMMARY = new Set<LossKind>(["wallet", "total"]);
+
 /**
  * Onde os posts ficam guardados. Com DATABASE_URL (Neon na Vercel) é Postgres;
  * sem ela, o arquivo data/losses.json de sempre, para rodar no PC.
@@ -60,18 +63,18 @@ export function createStore(backend: Backend) {
     return backend.respect(id, key);
   }
 
-  /** Ranking pelo maior vacilo de cada carteira. O total soma só posts por token (o resumo repetiria valores). */
+  /** Ranking pelo maior vacilo de cada carteira. O total soma só posts por token (os resumos repetiriam valores). */
   async function leaderboard(limit = 50): Promise<LeaderRow[]> {
     const rows = new Map<string, LeaderRow>();
     for (const l of await backend.all()) {
       const k = walletKey(l.wallet);
       const r = rows.get(k) ?? { wallet: l.wallet, chain: l.chain, family: l.family, total: 0, count: 0, biggest: 0, biggestKind: "missed", biggestToken: "", biggestSymbol: "" };
-      if (l.kind !== "wallet") r.total += l.amountUsd;
+      if (!SUMMARY.has(l.kind)) r.total += l.amountUsd;
       r.count++;
       if (l.amountUsd > r.biggest) {
         r.biggest = l.amountUsd;
         r.biggestKind = l.kind;
-        r.biggestToken = l.kind === "wallet" ? "whole wallet" : `$${l.token.toUpperCase()}`;
+        r.biggestToken = SUMMARY.has(l.kind) ? "whole wallet" : `$${l.token.toUpperCase()}`;
         r.biggestLogo = l.logo;
         r.biggestSymbol = l.token;
         r.chain = l.chain;
@@ -87,7 +90,7 @@ export function createStore(backend: Backend) {
     let biggest: Loss | null = null;
     const wallets = new Set<string>();
     for (const l of all) {
-      if (l.kind !== "wallet") {
+      if (!SUMMARY.has(l.kind)) {
         total += l.amountUsd;
         if (l.family === "solana") sol += l.amountUsd;
         else evm += l.amountUsd;

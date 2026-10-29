@@ -14,13 +14,16 @@ type Props = { params: Promise<{ id: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const loss = await getLoss(id);
-  if (!loss) return { title: "Post not found · LossPornHub" };
+  // O layout já acrescenta " · LossPornHub" ao título da aba; o do compartilhamento leva o nome junto
+  if (!loss) return { title: "Post not found" };
   const title = `${headline(loss)} · LossPornHub`;
   const description =
     loss.kind === "realized"
       ? "Bought high, sold low. On-chain wallet scan, signed by the owner."
-      : "Sold early and the token went up. On-chain wallet scan, signed by the owner.";
-  return { title, description, openGraph: { title, description } };
+      : loss.kind === "total"
+        ? "Everything left on the table plus every realized loss. On-chain wallet scan, signed by the owner."
+        : "Sold early and the token went up. On-chain wallet scan, signed by the owner.";
+  return { title: headline(loss), description, openGraph: { title, description } };
 }
 
 export default async function PostPage({ params }: Props) {

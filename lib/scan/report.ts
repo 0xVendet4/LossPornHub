@@ -69,6 +69,7 @@ export function buildReport(args: {
       realizedUsd,
       lastSellAt: last.at,
       lastSellTx: last.tx,
+      pool: quote?.pool,
     });
   }
 

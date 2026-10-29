@@ -103,3 +103,16 @@ export const IconDownload = ({ className = "size-3.5" }: P) => (
     <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
   </svg>
 );
+
+export const IconWide = ({ className = "size-3.5" }: P) => (
+  <svg viewBox="0 0 24 24" className={className} {...base}>
+    <rect x="2.5" y="6" width="19" height="12" rx="2.5" />
+    <path d="M12 9v6M9.5 12.5L12 15l2.5-2.5" />
+  </svg>
+);
+
+export const IconFlame = ({ className = "size-3.5" }: P) => (
+  <svg viewBox="0 0 24 24" className={className} {...base}>
+    <path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1-5 1-8.5z" />
+  </svg>
+);
