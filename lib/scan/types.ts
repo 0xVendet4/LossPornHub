@@ -47,6 +47,10 @@ export type Report = {
   chains: ChainKey[];
   failedChains: ChainKey[];
   swapCount: number;
+  /** Data do swap mais antigo lido: até onde o histórico chegou. */
+  oldestSwapAt?: number;
+  /** Com o histórico cortado: a partir dessa data, todos os swaps de todas as redes foram lidos. */
+  completeSince?: number;
   /** Histórico cortado no limite de páginas: só os swaps mais recentes entraram. */
   truncated: boolean;
   tokens: TokenStat[];

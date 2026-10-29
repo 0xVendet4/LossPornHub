@@ -1,4 +1,4 @@
-import { ENV_WHERE, ScanError } from "./errors";
+import { ENV_WHERE, ScanError, until } from "./errors";
 import { NATIVE, swapFromLegs, type Leg } from "./legs";
 import type { Swap } from "./types";
 
@@ -52,52 +52,64 @@ function legsOf(wallet: string, raw: RawTx): Leg[] {
   return legs;
 }
 
-/** Swaps mais recentes da carteira, até `maxPages` × 100. */
-export async function fetchSolanaSwaps(wallet: string, apiKey: string, maxPages = 5) {
+/**
+ * Swaps da carteira, dos mais recentes para trás, até o prazo do raio-x ou `maxPages` chamadas
+ * (cada uma custa 100 créditos da Helius). Com o filtro de tipo, a Helius olha uma janela de transações
+ * por chamada: uma página pode vir com menos de 100 swaps, ou vazia com "continue daqui", e ainda haver
+ * swaps mais antigos. Só para quando a lista acaba de verdade.
+ */
+export async function fetchSolanaSwaps(wallet: string, apiKey: string, deadline: number, maxPages = 25) {
   const swaps: Swap[] = [];
   let unpriced = 0;
   let before: string | undefined;
-  let cursorParam = "before";
-  let page = 0;
+  let cursorParam = "before-signature";
+  let more = true;
 
-  while (page < maxPages) {
+  for (let page = 0; more && page < maxPages; page++) {
+    if (Date.now() > deadline) break;
     const url = new URL(`${HOST}/v0/addresses/${wallet}/transactions`);
     url.searchParams.set("api-key", apiKey);
     url.searchParams.set("type", "SWAP");
+    url.searchParams.set("sort-order", "desc");
     url.searchParams.set("limit", "100");
     if (before) url.searchParams.set(cursorParam, before);
 
-    const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(25_000) });
+    const res = await fetch(url, { cache: "no-store", signal: until(deadline, 25_000) });
     if (res.status === 401 || res.status === 403)
       throw new ScanError(`Helius rejected the API key. Check HELIUS_API_KEY in ${ENV_WHERE}.`, 500, "bad_key");
     if (res.status === 429) throw new ScanError("Helius rate limit reached. Try again in a few minutes.", 429, "rate_limited");
-    // Versões da API chamam o cursor de nomes diferentes
-    if (res.status === 400 && before && cursorParam === "before") {
-      cursorParam = "before-signature";
+    const body = (await res.json().catch(() => null)) as RawTx[] | { error?: string } | null;
+
+    // Nenhum swap nessa janela: a Helius diz de qual assinatura continuar
+    const error = body && !Array.isArray(body) ? String(body.error ?? "") : "";
+    if (/failed to find events/i.test(error)) {
+      const next = error.match(/parameter set to ([1-9A-HJ-NP-Za-km-z]{32,})/)?.[1];
+      if (!next) break;
+      before = next;
       continue;
     }
-    if (!res.ok) throw new ScanError(`Helius responded ${res.status}.`);
+    // Versões da API chamam o cursor de nomes diferentes
+    if (res.status === 400 && before && cursorParam === "before-signature") {
+      cursorParam = "before";
+      page--;
+      continue;
+    }
+    if (!res.ok || !Array.isArray(body)) throw new ScanError(`Helius responded ${res.status}.`);
 
-    const list = (await res.json()) as RawTx[];
-    if (!Array.isArray(list) || list.length === 0) {
-      before = undefined;
+    if (body.length === 0) {
+      more = false;
       break;
     }
-    for (const raw of list) {
+    for (const raw of body) {
       if (raw.transactionError || !raw.signature) continue;
       const r = await swapFromLegs("solana", raw.signature, Number(raw.timestamp) * 1000, legsOf(wallet, raw));
       if (r === "unpriced") unpriced++;
       else if (r) swaps.push(...r);
     }
-    before = list[list.length - 1].signature;
-    page++;
-    if (list.length < 100) {
-      before = undefined;
-      break;
-    }
+    before = body[body.length - 1].signature;
   }
 
-  return { swaps, truncated: Boolean(before), unpriced };
+  return { swaps, truncated: more, unpriced };
 }
 
 export type AssetMeta = { symbol: string; name: string; logo: string | null };

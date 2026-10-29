@@ -79,7 +79,7 @@ async function run(wallet: string, family: "evm" | "solana", budgetMs = 25_000):
   const viaAlchemy = (c: ChainKey) => !!alchemyKey && !!ALCHEMY_SLUG[c];
   const paidChains: ChainKey[] = family === "evm" ? EVM_CHAINS.filter((c) => PAID_ONLY.has(c) && !viaAlchemy(c)) : [];
   const chains: ChainKey[] = family === "evm" ? EVM_CHAINS.filter((c) => !paidChains.includes(c)) : ["solana"];
-  // A função da Vercel tem 60 s e, se passar, devolve erro sem explicação. O raio-x EVM para de paginar em 25 s
+  // A função da Vercel tem 60 s e, se passar, devolve erro sem explicação. O raio-x para de paginar em 25 s
   // e usa o que já leu; a rede que ainda não terminou em 37 s fica de fora. Depois ainda vem o preço de hoje.
   const deadline = Date.now() + budgetMs;
   const cutoff = <T,>(job: Promise<T>, c: ChainKey) => {
@@ -106,9 +106,14 @@ async function run(wallet: string, family: "evm" | "solana", budgetMs = 25_000):
   const results = await Promise.allSettled(
     chains.map((c) =>
       timed(
-        c === "solana"
-          ? fetchSolanaSwaps(wallet, apiKey)
-          : cutoff(viaAlchemy(c) ? fetchAlchemySwaps(c, wallet, alchemyKey!, deadline) : fetchEvmSwaps(c, wallet, apiKey, deadline), c),
+        cutoff(
+          c === "solana"
+            ? fetchSolanaSwaps(wallet, apiKey, deadline)
+            : viaAlchemy(c)
+              ? fetchAlchemySwaps(c, wallet, alchemyKey!, deadline)
+              : fetchEvmSwaps(c, wallet, apiKey, deadline),
+          c,
+        ),
         c,
       ),
     ),
@@ -117,6 +122,8 @@ async function run(wallet: string, family: "evm" | "solana", budgetMs = 25_000):
   const swaps: Swap[] = [];
   const failedChains: ChainKey[] = [];
   let truncated = false;
+  // Numa rede cortada no prazo, o swap mais antigo lido marca de quando em diante o histórico está completo
+  let completeSince: number | undefined;
   let unpricedSwaps = 0;
   let firstError: unknown;
   const failedReasons: string[] = [];
@@ -124,6 +131,7 @@ async function run(wallet: string, family: "evm" | "solana", budgetMs = 25_000):
     if (r.status === "fulfilled") {
       swaps.push(...r.value.swaps);
       truncated ||= r.value.truncated;
+      if (r.value.truncated && r.value.swaps.length) completeSince = Math.max(completeSince ?? 0, Math.min(...r.value.swaps.map((s) => s.at)));
       unpricedSwaps += r.value.unpriced;
     } else if (r.reason instanceof ScanError && r.reason.code === "paid_chain") {
       paidChains.push(chains[i]);
@@ -170,6 +178,7 @@ async function run(wallet: string, family: "evm" | "solana", budgetMs = 25_000):
       prices,
     }),
     unpricedSwaps,
+    completeSince,
     paidChains,
     failedReasons,
     timing: { ...timing, total: Date.now() - t0 },

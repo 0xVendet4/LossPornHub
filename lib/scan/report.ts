@@ -82,6 +82,7 @@ export function buildReport(args: {
     chains: args.chains,
     failedChains: args.failedChains,
     swapCount: args.swaps.length,
+    oldestSwapAt: args.swaps.length ? Math.min(...args.swaps.map((s) => s.at)) : undefined,
     truncated: args.truncated,
     tokens,
     totals: {

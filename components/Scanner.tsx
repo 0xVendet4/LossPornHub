@@ -275,7 +275,7 @@ function ReportView({
         {[
           report.demo ? "Example wallet" : short(report.wallet),
           report.chains.map((c) => CHAINS[c].name).join(", "),
-          `${report.swapCount} swaps read`,
+          report.oldestSwapAt ? `${report.swapCount} swaps read, back to ${date(report.oldestSwapAt)}` : `${report.swapCount} swaps read`,
           "Today's price: DexScreener",
         ].map((t) => (
           <span key={t} className="pill">
@@ -287,7 +287,12 @@ function ReportView({
       {(report.demo || report.truncated || report.failedChains.length > 0 || (report.paidChains?.length ?? 0) > 0 || totals.unpriced > 0 || (report.unpricedSwaps ?? 0) > 0) && (
         <ul className="flex flex-col gap-2 text-sm text-dim">
           {report.demo && <Note>Example with made-up data. Scan a real wallet to see your own numbers.</Note>}
-          {report.truncated && <Note>Very active wallet: only the most recent swaps per network were read.</Note>}
+          {report.truncated && (
+            <Note>
+              Very active wallet: {report.completeSince ? `every swap since ${date(report.completeSince)} was read` : "only the most recent swaps were read"} before
+              the time limit. Older swaps aren&apos;t counted.
+            </Note>
+          )}
           {(report.paidChains?.length ?? 0) > 0 && (
             <Note>
               Skipped {report.paidChains!.map((c) => CHAINS[c].name).join(", ")}: the free Etherscan plan doesn&apos;t cover{" "}
