@@ -1,5 +1,5 @@
-import { EVM_CHAINS, detectFamily, walletKey, type ChainKey } from "../chains";
-import { ENV_WHERE, ScanError } from "./errors";
+import { CHAINS, EVM_CHAINS, detectFamily, walletKey, type ChainKey } from "../chains";
+import { ENV_WHERE, GRACE, ScanError } from "./errors";
 import { ALCHEMY_SLUG, fetchAlchemySwaps } from "./alchemy";
 import { PAID_ONLY, fetchEvmSwaps } from "./etherscan";
 import { fetchSolanaMetadata, fetchSolanaSwaps } from "./helius";
@@ -37,9 +37,16 @@ async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
   const viaAlchemy = (c: ChainKey) => !!alchemyKey && !!ALCHEMY_SLUG[c];
   const paidChains: ChainKey[] = family === "evm" ? EVM_CHAINS.filter((c) => PAID_ONLY.has(c) && !viaAlchemy(c)) : [];
   const chains: ChainKey[] = family === "evm" ? EVM_CHAINS.filter((c) => !paidChains.includes(c)) : ["solana"];
-  // A função da Vercel tem 60 s; o raio-x EVM para de paginar em 30 s e usa o que já leu
-  // (chamadas em andamento ainda têm alguns segundos, e depois vem o preço de hoje)
-  const deadline = Date.now() + 30_000;
+  // A função da Vercel tem 60 s e, se passar, devolve erro sem explicação. O raio-x EVM para de paginar em 25 s
+  // e usa o que já leu; a rede que ainda não terminou em 37 s fica de fora. Depois ainda vem o preço de hoje.
+  const deadline = Date.now() + 25_000;
+  const cutoff = <T,>(job: Promise<T>, c: ChainKey) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new ScanError(`${CHAINS[c].name} has too much history to read in time.`, 504, "slow_chain")), deadline + GRACE - Date.now());
+    });
+    return Promise.race([job, stop]).finally(() => clearTimeout(timer));
+  };
   const apiKey = family === "evm" ? process.env.ETHERSCAN_API_KEY : process.env.HELIUS_API_KEY;
   if (!apiKey)
     throw new ScanError(
@@ -54,9 +61,7 @@ async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
     chains.map((c) =>
       c === "solana"
         ? fetchSolanaSwaps(wallet, apiKey)
-        : viaAlchemy(c)
-          ? fetchAlchemySwaps(c, wallet, alchemyKey!, deadline)
-          : fetchEvmSwaps(c, wallet, apiKey, deadline),
+        : cutoff(viaAlchemy(c) ? fetchAlchemySwaps(c, wallet, alchemyKey!, deadline) : fetchEvmSwaps(c, wallet, apiKey, deadline), c),
     ),
   );
 

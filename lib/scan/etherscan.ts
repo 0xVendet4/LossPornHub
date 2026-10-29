@@ -1,5 +1,5 @@
 import type { ChainKey } from "../chains";
-import { ENV_WHERE, ScanError, sleep, until } from "./errors";
+import { ENV_WHERE, ScanError, late, sleep, until } from "./errors";
 import { NATIVE, swapFromLegs, type Leg } from "./legs";
 import type { Swap } from "./types";
 
@@ -29,15 +29,17 @@ export const PAID_ONLY = new Set<ChainKey>();
 // Fila global com espaçamento, para respeitar o limite do plano grátis
 let last = 0;
 let queue: Promise<unknown> = Promise.resolve();
-function throttled<T>(fn: () => Promise<T>): Promise<T> {
-  const run = queue.then(async () => {
+function throttled<T>(deadline: number, fn: () => Promise<T>): Promise<T> {
+  // A fila só espaça o começo das chamadas: uma resposta lenta numa rede não segura as outras
+  const turn = queue.then(async () => {
+    // O raio-x já desistiu desta rede: sai da fila sem esperar, para não atrasar o próximo
+    if (late(deadline)) throw new ScanError("Out of time.", 504, "slow_chain");
     const wait = last + 350 - Date.now();
     if (wait > 0) await sleep(wait);
     last = Date.now();
-    return fn();
   });
-  queue = run.catch(() => undefined);
-  return run;
+  queue = turn.catch(() => undefined);
+  return turn.then(fn);
 }
 
 type Row = Record<string, string>;
@@ -50,7 +52,7 @@ async function call(chain: ChainKey, params: Record<string, string | number>, ap
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
     url.searchParams.set("apikey", apiKey);
 
-    const res = await throttled(() => fetch(url, { cache: "no-store", signal: until(deadline) }));
+    const res = await throttled(deadline, () => fetch(url, { cache: "no-store", signal: until(deadline) }));
     if (res.status === 429) {
       await sleep(1200);
       continue;

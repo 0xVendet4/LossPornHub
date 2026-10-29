@@ -1,5 +1,5 @@
 import type { ChainKey } from "../chains";
-import { ENV_WHERE, ScanError, sleep, until } from "./errors";
+import { ENV_WHERE, ScanError, late, sleep, until } from "./errors";
 import { NATIVE, swapFromLegs, type Leg } from "./legs";
 import type { Swap } from "./types";
 
@@ -27,15 +27,17 @@ const MAX_BALANCE_LOOKUPS = 48;
 // Fila global: cada página do Transfers API custa ~150 CUs e o plano grátis aguenta 300 por segundo
 let last = 0;
 let queue: Promise<unknown> = Promise.resolve();
-function throttled<T>(gap: number, fn: () => Promise<T>): Promise<T> {
-  const run = queue.then(async () => {
+function throttled<T>(gap: number, deadline: number, fn: () => Promise<T>): Promise<T> {
+  // A fila só espaça o começo das chamadas: uma resposta lenta numa rede não segura as outras
+  const turn = queue.then(async () => {
+    // O raio-x já desistiu desta rede: sai da fila sem esperar, para não atrasar o próximo
+    if (late(deadline)) throw new ScanError("Out of time.", 504, "slow_chain");
     const wait = last + gap - Date.now();
     if (wait > 0) await sleep(wait);
     last = Date.now();
-    return fn();
   });
-  queue = run.catch(() => undefined);
-  return run;
+  queue = turn.catch(() => undefined);
+  return turn.then(fn);
 }
 
 const NAME: Partial<Record<ChainKey, string>> = { base: "Base", optimism: "Optimism", bsc: "BNB Chain", robinhood: "Robinhood Chain" };
@@ -46,7 +48,7 @@ type RpcReply = { id?: number; result?: unknown; error?: { code?: number; messag
 async function rpc(chain: ChainKey, apiKey: string, calls: RpcCall[], gap: number, deadline: number): Promise<unknown[]> {
   const body = calls.map((c, id) => ({ jsonrpc: "2.0", id, ...c }));
   for (let attempt = 0; attempt < 4; attempt++) {
-    const res = await throttled(gap, () =>
+    const res = await throttled(gap, deadline, () =>
       fetch(`https://${ALCHEMY_SLUG[chain]}.g.alchemy.com/v2/${apiKey}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
