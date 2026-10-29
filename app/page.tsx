@@ -23,7 +23,7 @@ const STEPS = [
   {
     icon: IconLayers,
     title: "We read your swaps",
-    text: "Ethereum, Base, Arbitrum, Optimism, Polygon, BNB, Robinhood Chain and Solana. Every sell is compared with today's price.",
+    text: "Ethereum, Base, Arbitrum, Polygon, BNB, Robinhood Chain and Solana. Every sell is compared with today's price.",
   },
   {
     icon: IconTrendUp,

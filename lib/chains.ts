@@ -48,7 +48,8 @@ export const CHAIN_LIST = Object.values(CHAINS);
 
 export type Family = "evm" | "solana";
 
-export const EVM_CHAINS = CHAIN_LIST.filter((c) => c.family === "evm").map((c) => c.key);
+// Redes EVM que o raio-x lê. A Optimism fica de fora (o Chris não precisa dela); continua em CHAINS para a carteira conectar.
+export const EVM_CHAINS = CHAIN_LIST.filter((c) => c.family === "evm" && c.key !== "optimism").map((c) => c.key);
 
 /** Identifica se o endereço é EVM (0x…) ou Solana (base58, 32 bytes). */
 export function detectFamily(address: string): Family | null {

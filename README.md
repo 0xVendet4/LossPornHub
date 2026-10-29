@@ -25,9 +25,10 @@ Sem a chave dá para ver a tela com "ver um exemplo" em /scan, mas não dá para
 Nenhuma pede cartão. Dá para preencher só uma, se for ler só uma das redes.
 
 1. **Solana:** conta em https://dashboard.helius.dev (plano Free, 1 milhão de créditos por mês). Copie a API key
-2. **EVM:** conta em https://etherscan.io/apidashboard (plano Free, 100 mil chamadas por dia). Uma chave vale para Ethereum, Base, Arbitrum, Optimism, Polygon e BNB
-3. Em `.env.local`: `HELIUS_API_KEY=...` e `ETHERSCAN_API_KEY=...`
-4. Reinicie o `npm run dev`
+2. **EVM:** conta em https://etherscan.io/apidashboard (plano Free, 100 mil chamadas por dia). No plano grátis a chave vale para Ethereum, Arbitrum e Polygon
+3. **Base, BNB e Robinhood Chain:** app em https://dashboard.alchemy.com (plano Free), com essas três redes ligadas em Networks
+4. Em `.env.local`: `HELIUS_API_KEY=...`, `ETHERSCAN_API_KEY=...` e `ALCHEMY_API_KEY=...`
+5. Reinicie o `npm run dev`
 
 Um raio-x EVM faz até 7 chamadas por rede na Etherscan (limite de 3 por segundo no plano grátis, então leva uns segundos). O resultado fica em cache por 15 minutos.
 
@@ -47,7 +48,7 @@ As tabelas são criadas sozinhas no primeiro acesso. Para colocar os posts de ex
 
 - `lib/scan/helius.ts` lê o histórico de swaps da carteira Solana (já interpretado pela Helius, até 500 mais recentes)
 - `lib/scan/etherscan.ts` lê transferências de token, ETH enviado e ETH recebido em Ethereum, Arbitrum e Polygon e junta por transação
-- `lib/scan/alchemy.ts` faz o mesmo em Base, BNB, Optimism e Robinhood Chain, que a Etherscan grátis não cobre. Onde a Alchemy não lista o ETH devolvido pelo router, ele sai da diferença de saldo da carteira no bloco da venda
+- `lib/scan/alchemy.ts` faz o mesmo em Base, BNB e Robinhood Chain, que a Etherscan grátis não cobre. Onde a Alchemy não lista o ETH devolvido pelo router, ele sai da diferença de saldo da carteira no bloco da venda
 - `lib/scan/legs.ts` transforma cada transação em "o que saiu" e "o que entrou". O lado em stable ou SOL/ETH/BNB/POL dá o valor em dólar; o outro lado é o token
 - `lib/scan/history.ts` pega o preço do dia de SOL/ETH/BNB/POL na Binance (sem chave; CryptoCompare se a Binance falhar)
 - `lib/scan/prices.ts` pega o preço atual na DexScreener (grátis, sem chave), usando o par de maior liquidez

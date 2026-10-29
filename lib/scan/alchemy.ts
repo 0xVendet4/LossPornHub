@@ -4,7 +4,7 @@ import { NATIVE, swapFromLegs, type Leg } from "./legs";
 import type { Swap } from "./types";
 
 /**
- * Redes que a Etherscan grátis não cobre (Base, BNB, Optimism, Robinhood Chain), lidas pela Alchemy
+ * Redes que a Etherscan grátis não cobre (Base, BNB, Robinhood Chain), lidas pela Alchemy
  * (plano Free: 30 milhões de CUs por mês, 300 CUs por segundo, uma chave para todas as redes).
  *
  * As transferências vêm do Transfers API. O ETH que um router devolve numa venda é uma transferência interna,
@@ -14,7 +14,6 @@ import type { Swap } from "./types";
  */
 export const ALCHEMY_SLUG: Partial<Record<ChainKey, string>> = {
   base: "base-mainnet",
-  optimism: "opt-mainnet",
   bsc: "bnb-mainnet",
   robinhood: "robinhood-mainnet",
 };
@@ -40,7 +39,7 @@ function throttled<T>(gap: number, deadline: number, fn: () => Promise<T>): Prom
   return turn.then(fn);
 }
 
-const NAME: Partial<Record<ChainKey, string>> = { base: "Base", optimism: "Optimism", bsc: "BNB Chain", robinhood: "Robinhood Chain" };
+const NAME: Partial<Record<ChainKey, string>> = { base: "Base", bsc: "BNB Chain", robinhood: "Robinhood Chain" };
 
 type RpcCall = { method: string; params: unknown[] };
 type RpcReply = { id?: number; result?: unknown; error?: { code?: number; message?: string } };

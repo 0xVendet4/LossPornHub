@@ -42,6 +42,13 @@ export const IconArrow = ({ className = "size-4" }: P) => (
   </svg>
 );
 
+export const IconShare = ({ className = "size-4" }: P) => (
+  <svg viewBox="0 0 24 24" className={className} {...base}>
+    <path d="M12 15V3M7 8l5-5 5 5" />
+    <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+  </svg>
+);
+
 export const IconArrowUp = ({ className = "size-4" }: P) => (
   <svg viewBox="0 0 24 24" className={className} {...base}>
     <path d="M12 19V5M6 11l6-6 6 6" />

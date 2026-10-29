@@ -70,7 +70,7 @@ export default function About() {
         <ul className="surface divide-y divide-line">
           {[
             ["Solana swaps", "Helius, which already delivers every transaction decoded: what left the wallet and what came in."],
-            ["EVM swaps", "Etherscan on Ethereum, Arbitrum and Polygon; Alchemy on Base, BNB, Optimism and Robinhood Chain. We join the token transfers and the ETH of each transaction."],
+            ["EVM swaps", "Etherscan on Ethereum, Arbitrum and Polygon; Alchemy on Base, BNB and Robinhood Chain. We join the token transfers and the ETH of each transaction."],
             ["Dollar value at the time of the sell", "The stablecoin side counts 1:1. The SOL, ETH, BNB or POL side uses that day's close on Binance."],
             ["Today's price", "DexScreener, using the most liquid pair. A token with no listed pair gets no price and stays out of the math."],
           ].map(([k, v]) => (
