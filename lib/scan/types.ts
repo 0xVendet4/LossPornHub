@@ -57,5 +57,6 @@ export type Report = {
   paidChains?: ChainKey[];
   /** Por que as redes de `failedChains` falharam, sem repetir. */
   failedReasons?: string[];
+  timing?: Record<string, number>;
   demo?: boolean;
 };

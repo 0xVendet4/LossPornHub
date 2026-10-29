@@ -57,11 +57,18 @@ async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
       "no_key"
     );
 
+  // Quanto cada etapa levou, em ms: aparece no ?trace=1 da API para entender raio-x lento no site
+  const t0 = Date.now();
+  const timing: Record<string, number> = {};
+  const timed = <T,>(job: Promise<T>, name: string) => job.finally(() => (timing[name] = Date.now() - t0));
   const results = await Promise.allSettled(
     chains.map((c) =>
-      c === "solana"
-        ? fetchSolanaSwaps(wallet, apiKey)
-        : cutoff(viaAlchemy(c) ? fetchAlchemySwaps(c, wallet, alchemyKey!, deadline) : fetchEvmSwaps(c, wallet, apiKey, deadline), c),
+      timed(
+        c === "solana"
+          ? fetchSolanaSwaps(wallet, apiKey)
+          : cutoff(viaAlchemy(c) ? fetchAlchemySwaps(c, wallet, alchemyKey!, deadline) : fetchEvmSwaps(c, wallet, apiKey, deadline), c),
+        c,
+      ),
     ),
   );
 
@@ -102,6 +109,8 @@ async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
     })
   );
 
+  timing.prices = Date.now() - t0;
+
   if (family === "solana") await fillSolanaMetadata(swaps, prices, apiKey);
   else {
     // A Alchemy às vezes não sabe o símbolo do token: usa o da DexScreener ou o começo do endereço
@@ -121,6 +130,7 @@ async function run(wallet: string, family: "evm" | "solana"): Promise<Report> {
     unpricedSwaps,
     paidChains,
     failedReasons,
+    timing: { ...timing, total: Date.now() - t0 },
   };
   cache.set(walletKey(wallet), { report, at: Date.now() });
   return report;

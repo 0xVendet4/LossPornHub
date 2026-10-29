@@ -15,6 +15,14 @@ export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   const wallet = req.nextUrl.searchParams.get("wallet")?.trim() ?? "";
+  const t0 = Date.now();
+  const res = await answer(wallet);
+  // ?trace=1: sempre 200, com o status e o tempo, para conferir o site de fora (ferramentas que só leem respostas 2xx)
+  if (req.nextUrl.searchParams.get("trace") !== "1") return res;
+  return NextResponse.json({ status: res.status, ms: Date.now() - t0, body: await res.json() });
+}
+
+async function answer(wallet: string) {
   try {
     return NextResponse.json(await scanWallet(wallet));
   } catch (e) {
