@@ -1,4 +1,4 @@
-import { ENV_WHERE, ScanError, until } from "./errors";
+import { ENV_WHERE, ScanError, sleep, until } from "./errors";
 import { NATIVE, swapFromLegs, type Leg } from "./legs";
 import type { Swap } from "./types";
 
@@ -9,6 +9,31 @@ import type { Swap } from "./types";
 const HOST = "https://api.helius.xyz";
 const RPC = "https://mainnet.helius-rpc.com";
 const WSOL = NATIVE.solana.address;
+
+// Plano Free: 2 chamadas/s na API de transações. Fila global espaçando o começo das chamadas, como na Etherscan.
+const GAP = 600;
+let last = 0;
+let queue: Promise<unknown> = Promise.resolve();
+function throttled<T>(fn: () => Promise<T>): Promise<T> {
+  const turn = queue.then(async () => {
+    const wait = last + GAP - Date.now();
+    if (wait > 0) await sleep(wait);
+    last = Date.now();
+  });
+  queue = turn.catch(() => undefined);
+  return turn.then(fn);
+}
+
+/** Chamada com até 3 novas tentativas no 429 (respeitando Retry-After), sem passar do prazo. */
+async function fetchRetry(url: URL, deadline: number) {
+  for (let attempt = 0; ; attempt++) {
+    const res = await throttled(() => fetch(url, { cache: "no-store", signal: until(deadline, 25_000) }));
+    if (res.status !== 429 || attempt >= 3) return res;
+    const wait = Math.min(Number(res.headers.get("retry-after")) * 1000 || 1000 * 2 ** attempt, 8_000);
+    if (Date.now() + wait > deadline) return res;
+    await sleep(wait);
+  }
+}
 
 type RawTx = {
   signature: string;
@@ -74,10 +99,18 @@ export async function fetchSolanaSwaps(wallet: string, apiKey: string, deadline:
     url.searchParams.set("limit", "100");
     if (before) url.searchParams.set(cursorParam, before);
 
-    const res = await fetch(url, { cache: "no-store", signal: until(deadline, 25_000) });
+    const res = await fetchRetry(url, deadline);
     if (res.status === 401 || res.status === 403)
       throw new ScanError(`Helius rejected the API key. Check HELIUS_API_KEY in ${ENV_WHERE}.`, 500, "bad_key");
-    if (res.status === 429) throw new ScanError("Helius rate limit reached. Try again in a few minutes.", 429, "rate_limited");
+    if (res.status === 429) {
+      // Já tem swaps lidos: mostra o que deu, marcado como incompleto, em vez de perder tudo
+      if (page > 0) return { swaps, truncated: true, unpriced };
+      const text = await res.text().catch(() => "");
+      // Créditos do mês acabaram: esperar uns minutos não resolve
+      if (/credit|quota|usage|limit exceeded|max/i.test(text) && !/per second|rps/i.test(text))
+        throw new ScanError(`Helius says the monthly credits ran out ("${text.slice(0, 120)}"). Check the plan at dashboard.helius.dev.`, 429, "rate_limited");
+      throw new ScanError("Helius rate limit reached. Try again in a few minutes.", 429, "rate_limited");
+    }
     const body = (await res.json().catch(() => null)) as RawTx[] | { error?: string } | null;
 
     // Nenhum swap nessa janela: a Helius diz de qual assinatura continuar
